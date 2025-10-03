@@ -1,0 +1,149 @@
+.onlineUsersFullContainer{
+    height: 100%;
+    width: 100%;
+    /* border: 2px solid red; */
+    overflow: hidden;
+    padding: 10px 100px;
+}
+.onlineUserListInviteBox{
+    /* border: 2px solid red; */
+    padding: 7px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+.onlineUsersFullInnerContainer{
+    width: 100%;
+    height: 100%;
+    /* border: 2px solid green; */
+    overflow-y: auto;
+}
+.onlineUsersTitleReelChat{
+display: flex;
+/* border: 1px solid red; */
+width: 100%;
+padding: 10px 0px;
+align-items: center;
+}
+.onlineUsersTitleBox{
+font-size: 45px;
+font-weight: 800;
+flex:0 0 50%;
+}
+
+.onlineUsersName{
+
+flex:0 0 50%;
+display: flex;
+align-items: center;
+justify-content: flex-end;
+}
+.onlineUsersUserName{
+    max-width: 300px;
+display: block;
+text-overflow: ellipsis;
+white-space: nowrap;
+overflow: hidden;
+}
+.onlineUsersProfilePic{
+    display: flex;
+align-items: center;
+justify-content: center;
+padding-right: 10px;
+    /* border: 2px solid black; */
+    
+   
+}
+.onlineUserNameTagContainer{
+   
+display: flex;
+align-items: center;
+padding: 7px 0px ;
+}
+.onlineUserListName{
+        flex: 1;
+  
+  
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 100%;
+}
+.onlineUserListPhotoContainerKrishyu{
+
+    height: 50px;
+    width: 50px;
+    border-radius: 5px;
+}
+.onlineUserListPhotoMeToo{
+    height: 100%;
+    width: 100%;
+ border-radius: 5px;
+}
+.onlineUserListPhotoContainer{
+  flex: 0 0 9%;
+ 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-right: 10px;
+    
+}
+.bioForInvitingOnlineUsers{
+/* border: 2px solid magenta; */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;         /* ✅ Limit to 2 lines */
+  -webkit-box-orient: vertical;  /* ✅ Vertical box */
+  overflow: hidden;              /* ✅ Hide overflow */
+  text-overflow: ellipsis;       /* ✅ Add "..." at the end */
+}
+.onlineUserListPhoto{
+
+    /* height: 30px;
+    width: 30px;
+    border-radius: 10px; */
+   height: 100%;
+   width: 100%;
+    box-sizing: border-box; /* ← FIX */
+}
+.onlineUserListOuterBox{
+    
+    /* border: 2px solid red; */
+ display: grid;
+     grid-template-columns: repeat(2,2fr);
+    grid-template-rows:repeat(1,200px);
+    
+}
+.onlineUserListContainer{
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    
+  
+    /* border: 2px solid black; */
+}
+.containerOfOnLineUsersFollowSuggestions{
+    display: flex;
+    flex-direction: column;
+    /* border: 2px solid magenta; */
+    padding: 15px 0px;
+}
+.onlineUsersProfilePicOuter{
+margin-right: 5px;
+height: 50px;
+    width: 50px;
+     border-radius: 10px;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+}
+.titleOfOnlineUserSubComponent{
+    font-size: 35px;
+font-weight: 600;
+width: 100%;
+padding: 10px 0px;
+}
+.OnlineUsersListContainer{
+    border-bottom: 1px solid grey;
+    padding: 10px 0px;
+}
