@@ -1,23 +1,35 @@
-// src/Redux/Slice/Profile/ProfileInformationSlice.js
+// ✅ src/Redux/Slice/Profile/ProfileInformationSlice.js - COMPLETE FILE WITH HTTPS FIX
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import API_CONFIG from "../../../config/api";
 
-// -------------------- BASE API --------------------
-const API_URL = "http://192.168.2.16:8000/api/profileInformation"; // replace with your PC IP
+// ✅ Force HTTPS helper function
+const getSecureUrl = (path) => {
+  if (!path) return null;
+  const baseUrl = "https://finallaunchbackend.onrender.com";
+  const url = path.startsWith('http') ? path : `${baseUrl}${path}`;
+  return url.replace(/^http:/, 'https:');
+};
+
+// --------------setProfileImage------ BASE API --------------------
+const API_URL = "https://finallaunchbackend.onrender.com/api/profileInformation"; // replace with your PC IP
 
 // -------------------- THUNKS --------------------
 
-// Fetch profile by ID
+// ✅ Fetch profile by ID
 export const fetchProfileById = createAsyncThunk(
   "profile/fetchProfileById",
   async (id, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_URL}/byId/${id}`);
-      // Ensure profileImage is full URL
-      if (data.profileImage && data.profileImage.startsWith("/uploads")) {
-        data.profileImage = `${API_URL}${data.profileImage}`;
+      const { data } = await 
+      axios.get(`${API_URL}/byId/${id}`);
+
+      // ✅ Force HTTPS on profileImage
+      if (data.profileImage) {
+        data.profileImage = getSecureUrl(data.profileImage);
       }
+
       await AsyncStorage.setItem("profile", JSON.stringify(data));
       return data;
     } catch (error) {
@@ -26,7 +38,7 @@ export const fetchProfileById = createAsyncThunk(
   }
 );
 
-// Update profile (name, bio, image URI)
+// ✅ Update profile (name, bio, image URI)
 export const updateProfile = createAsyncThunk(
   "profile/updateProfile",
   async ({ username, updates }, { rejectWithValue }) => {
@@ -36,37 +48,34 @@ export const updateProfile = createAsyncThunk(
       let formData;
       let isFileUpload = false;
 
-      // Check if profileImage is local file
+      // Handle image uploads
       if (
-  updates.profileImage?.startsWith("file://") ||
-  updates.profileImage?.startsWith("blob:")
-) {
-  formData = new FormData();
+        updates.profileImage?.startsWith("file://") ||
+        updates.profileImage?.startsWith("blob:")
+      ) {
+        formData = new FormData();
+        let uri = updates.profileImage;
 
-  let uri = updates.profileImage;
+        // Web: fetch blob
+        if (uri.startsWith("blob:") && typeof window !== "undefined") {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          const file = new File([blob], "profile.jpg", { type: blob.type });
+          formData.append("profileImage", file);
+        } else {
+          // Mobile
+          formData.append("profileImage", {
+            uri,
+            type: "image/jpeg",
+            name: "profile.jpg",
+          });
+        }
 
-  // On web, fetch blob and convert to File
-  if (uri.startsWith("blob:") && typeof window !== "undefined") {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const file = new File([blob], "profile.jpg", { type: blob.type });
-    formData.append("profileImage", file);
-  } else {
-    // Mobile: file:// URI
-    formData.append("profileImage", {
-      uri,
-      type: "image/jpeg",
-      name: "profile.jpg",
-    });
-  }
+        if (updates.name) formData.append("name", updates.name);
+        if (updates.bio) formData.append("bio", updates.bio);
+        isFileUpload = true;
+      }
 
-  if (updates.name) formData.append("name", updates.name);
-  if (updates.bio) formData.append("bio", updates.bio);
-  isFileUpload = true;
-}
-
-
-      // If not a local file, just send JSON
       const config = {
         headers: isFileUpload
           ? { "Content-Type": "multipart/form-data" }
@@ -77,28 +86,37 @@ export const updateProfile = createAsyncThunk(
 
       const { data } = await axios.put(`${API_URL}/${safeUsername}`, body, config);
 
-      // Ensure profileImage is full URL
-      if (data.profileImage && data.profileImage.startsWith("/uploads")) {
-        data.profileImage = `${API_URL}${data.profileImage}`;
+      // ✅ Force HTTPS on profileImage
+      if (data.profileImage) {
+        data.profileImage = getSecureUrl(data.profileImage);
       }
 
       await AsyncStorage.setItem("profile", JSON.stringify(data));
-   
+
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message || "Failed to update profile");
+      return rejectWithValue(
+        error.response?.data?.message || error.message || "Failed to update profile"
+      );
     }
   }
 );
 
-// Load profile from AsyncStorage
+// ✅ Load profile from AsyncStorage
 export const loadProfileFromStorage = createAsyncThunk(
   "profile/loadProfileFromStorage",
   async (_, { rejectWithValue }) => {
     try {
       const profileJSON = await AsyncStorage.getItem("profile");
       if (!profileJSON) return null;
-      return JSON.parse(profileJSON);
+      const profile = JSON.parse(profileJSON);
+      
+      // ✅ Force HTTPS on cached data too
+      if (profile.profileImage) {
+        profile.profileImage = getSecureUrl(profile.profileImage);
+      }
+      
+      return profile;
     } catch (err) {
       return rejectWithValue(err.message || "Failed to load profile");
     }
@@ -120,6 +138,7 @@ const profileInformationSlice = createSlice({
     error: null,
   },
   reducers: {
+    // ✅ CLEAR PROFILE (Integrated from File 1 + improved cleanup)
     clearProfile: (state) => {
       state.profile = null;
       state.profileName = "";
@@ -128,9 +147,12 @@ const profileInformationSlice = createSlice({
       state.username = "";
       state.reels = [];
       state.reelsCount = 0;
+      state.loading = false;
       state.error = null;
       AsyncStorage.removeItem("profile");
     },
+
+    // ✅ Local state updaters
     setProfileName: (state, action) => {
       state.profileName = action.payload;
     },
@@ -141,9 +163,11 @@ const profileInformationSlice = createSlice({
       state.profileImage = action.payload;
     },
   },
+
+  // -------------------- EXTRA REDUCERS --------------------
   extraReducers: (builder) => {
     builder
-      // Load from AsyncStorage
+      // ✅ Load from AsyncStorage
       .addCase(loadProfileFromStorage.fulfilled, (state, action) => {
         if (action.payload) {
           state.profile = action.payload;
@@ -156,7 +180,7 @@ const profileInformationSlice = createSlice({
         }
       })
 
-      // Fetch profile by ID
+      // ✅ Fetch profile by ID
       .addCase(fetchProfileById.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -170,13 +194,14 @@ const profileInformationSlice = createSlice({
         state.username = action.payload?.username || "";
         state.reels = action.payload?.reels || [];
         state.reelsCount = action.payload?.reelsCount || 0;
+       console.log("Fetched profile image URLLLLLLLLl:", state.profileImage);
       })
       .addCase(fetchProfileById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "Failed to fetch profile";
       })
 
-      // Update profile
+      // ✅ Update profile
       .addCase(updateProfile.fulfilled, (state, action) => {
         state.profile = action.payload;
         state.profileName = action.payload?.name || "";
@@ -190,7 +215,11 @@ const profileInformationSlice = createSlice({
 });
 
 // -------------------- EXPORTS --------------------
-export const { clearProfile, setProfileName, setProfileBio, setProfileImage } =
-  profileInformationSlice.actions;
+export const {
+  clearProfile,
+  setProfileName,
+  setProfileBio,
+  setProfileImage,
+} = profileInformationSlice.actions;
 
 export default profileInformationSlice.reducer;

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
@@ -26,29 +27,34 @@ export default function Reels({ userId }) {
   const dispatch = useDispatch();
   const route = useRoute();
   const navigation = useNavigation();
-  const loggedInUser = useSelector((state) => state.signUpAuth.user);
+  const loggedInUser = useSelector((state) => state.signUpAuth?.user);
   const routeUserId = route.params?.userId;
-  const userIdToFetch = userId || loggedInUser?._id; 
+  // Priority: explicit prop userId -> route param -> logged in user's id
+  const userIdToFetch = userId || routeUserId || loggedInUser?._id;
   const contentRef = useRef(null);
 
-  const { reels = [], loading, error } = useSelector(
+  // Expect shape in slice: { reels: [], loading: boolean, error: string|null }
+  const { reels = [], loading = false, error = null } = useSelector(
     (state) => state.reelNewDrop || {}
   );
 
   useEffect(() => {
+    // Only try to fetch if we have a user id
     if (userIdToFetch) {
       dispatch(fetchReelsByUserId(userIdToFetch));
     }
   }, [dispatch, userIdToFetch]);
 
-
   const handleImageClick = (reel) => {
     dispatch(setSelectedPost({ ...reel, contentType: 'reel' }));
-    navigation.navigate("ImagePopUpScreen");
+    navigation.navigate('ImagePopUpScreen');
   };
 
   const renderItem = ({ item }) => {
-    const imageUri = item.posterImage || (item.photoReelImages && item.photoReelImages[0]);
+    const imageUri =
+      item?.posterImage ||
+      (Array.isArray(item?.photoReelImages) && item.photoReelImages[0]) ||
+      null;
 
     return (
       <TouchableOpacity
@@ -57,19 +63,11 @@ export default function Reels({ userId }) {
         activeOpacity={0.8}
       >
         <View style={styles.iconRow}>
-          <MaterialCommunityIcons
-            name="filmstrip"
-            size={16}
-            style={styles.hashtagIcon}
-          />
+          <MaterialCommunityIcons name="filmstrip" size={16} style={styles.hashtagIcon} />
         </View>
 
         {imageUri ? (
-          <Image
-            source={{ uri: imageUri }}
-            style={styles.thumbnail}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: imageUri }} style={styles.thumbnail} resizeMode="cover" />
         ) : (
           <View style={[styles.thumbnail, styles.noImage]}>
             <MaterialCommunityIcons name="film" size={24} color="#777" />
@@ -80,30 +78,53 @@ export default function Reels({ userId }) {
     );
   };
 
+  // --- Loading state ---
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" />
+   
         <Text style={styles.statusText}>Loading reels...</Text>
       </View>
     );
   }
 
-  if (error) {
+  // --- Real error (not "no reels") ---
+  // Some backends return 404 or message "No reels found..." when user has none.
+  // We'll treat that case as an empty state (not an error).
+  const errorMessage = typeof error === 'string' ? error : error?.message || null;
+  const isNoReelsError = errorMessage && /no reel|no reels|not found/i.test(errorMessage);
+
+  if (error && !isNoReelsError) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>
-          Error: {typeof error === 'string' ? error : error?.message || 'Something went wrong'}
+          Error: {errorMessage ?? 'Something went wrong while fetching reels.'}
         </Text>
       </View>
     );
   }
 
+  // --- Empty state: user has no reels yet (or reels array is empty) ---
+  const isEmpty = !reels || reels.length === 0;
+
+  if (isEmpty) {
+    return (
+      <View style={styles.centered}>
+       
+        <Text style={styles.statusText}>No reels uploaded yet</Text>
+        
+      </View>
+    );
+  }
+
+  // --- Normal view: show grid of reels ---
   return (
     <View style={styles.container} ref={contentRef}>
+     
       <FlatList
         data={reels}
-        keyExtractor={(item) => item._id || item.id || Math.random().toString()}
+        keyExtractor={(item, index) =>
+           item?._id ?? item?.id ?? String(index)}
         renderItem={renderItem}
         numColumns={numColumns}
         contentContainerStyle={styles.listContent}
@@ -111,7 +132,7 @@ export default function Reels({ userId }) {
         initialNumToRender={6}
         maxToRenderPerBatch={8}
         windowSize={10}
-        showsVerticalScrollIndicator={false}   // hide vertical scrollbar
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );
@@ -130,12 +151,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#fff',
-    
+
+    // ✅ Updated shadow (Expo SDK compatible)
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      default: {
+        boxShadow: '0px 1px 4px rgba(0,0,0,0.05)',
+      },
+    }),
     elevation: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
+
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -169,12 +199,15 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   statusText: {
     marginTop: 8,
-    color: '#666',
+    color: 'black',
+    fontSize: 16,
   },
   errorText: {
     color: 'red',
+    textAlign: 'center',
   },
 });

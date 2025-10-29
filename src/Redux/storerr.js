@@ -1,33 +1,33 @@
 // store.js
 import { configureStore } from '@reduxjs/toolkit';
 import { apiSlice } from './apiSlice';
-import authReducer from './Slices/Authentication/SignIn.js'
-import ProfileReducer from './Slices/Profile/ProfileSlice'; // Adjust the path
-import BackgroundReducer from './Slices/Profile/BackgroundSlice';
-import profileInformationReducer from './Slices/Profile/ProfileInformationSlice.js'
-import socketReducer from './Slices/ReelChat/socketSlice.js'
+import authReducer from './Slice/Authentication/authSlice.js'
+import ProfileReducer from './Slice/Profile/ProfileSlice.js'; // Adjust the path
+import BackgroundReducer from './Slice/Profile/BackgroundSlice.js';
+import profileInformationReducer from './Slice/Profile/ProfileInformationSlice.js'
+import socketReducer from './Slice/ReelChat/socketSlice.js'
 
-import signInAuthReducer from './Slices/Authentication/SignUp.js'
-import profileEditReducer from './Slices/Edit.js'
-import newDropSettingReducer from './Slices/Camera/NewDrop.js'
-import postReducer from './MakingNewDrop/Post.js'
-import highLightReducer from './MakingNewDrop/HighLight.js'
-import momentReducer from './MakingNewDrop/Moment.js'
-import reelReducer from './MakingNewDrop/Reel.js'
-import addDropReducer from './MakingNewDrop/AddDrop.js'
-import thoughtReducer from './MakingNewDrop/Thought.js'
-import reelChatPopUpReducer from './Slices/ReelChat/PopUp/UserNameEntering.js'
-import signInReelChatReducer from './Slices/Authentication/SignUp.js'
-import sampleeeeReducer from './Slices/ReelChat/Sampleeee.js'
-import imagePopUpExploreReducer from './Slices/Explore/ImagePopUp/ImagePopUpExplore.js'
 
-import reelNewDropReducer from './Slices/Profile/reelNewDrop.js'
+import profileEditReducer from './Edit.js'
+import newDropSettingReducer from './Slice/Camera/NewDrop.js'
+import postReducer from './Slice/MakingNewDrop/Post.js'
+
+
+import reelReducer from './Slice/MakingNewDrop/Reel.js'
+import addDropReducer from './Slice/MakingNewDrop/AddDrop.js'
+
+import reelChatPopUpReducer from './Slice/ReelChat/PopUp/UserNameEntering.js'
+import signInReelChatReducer from './Slice/Authentication/SignIn.js'
+
+import imagePopUpExploreReducer from './Slice/Explore/ImagePopUp/ImagePopUpExplore.js'
+
+import reelNewDropReducer from './Slice/Profile/reelNewDrop.js'
 
 import commonIconReducer from './CommonIcons.js'
 
 
 
-import profilePrivacyReducer from './Slices/Profile/InsideProfileSettings/ProfilePrivacy.js'
+import profilePrivacyReducer from './Slice/Profile/InsideProfileSettings/ProfilePrivacy.js'
 const store = configureStore({
   reducer: {
     [apiSlice.reducerPath]: apiSlice.reducer,
@@ -42,16 +42,15 @@ const store = configureStore({
   
      reelNewDrop:reelNewDropReducer,
     imagePopUpExplore:imagePopUpExploreReducer,
-    sampleeee:sampleeeeReducer,
+    
     addDrop:addDropReducer,
-    highLight:highLightReducer,
-    moment:momentReducer,
+   
     reel:reelReducer,
-    thought:thoughtReducer,
+   
     post: postReducer,
     profileEdit:profileEditReducer,
     signInReelChat:signInReelChatReducer,
-    signInAuth:signInAuthReducer,
+    
    
     auth:authReducer,
 

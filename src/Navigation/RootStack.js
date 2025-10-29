@@ -1,28 +1,56 @@
 import React, { useEffect, useState } from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { View, ActivityIndicator } from "react-native";
-import * as SecureStore from "expo-secure-store";
+import { View, ActivityIndicator, Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch, useSelector } from "react-redux";
-import { setCredentials } from "../Redux/Slice/Authentication/authSlice.js";
+import { setCredentials } from "../Redux/Slice/Authentication/SignUp.js"; // ← FIX PATH
 
-import WelcomeScreen from "../../src/Authentication/WelcomeScreen.js";
+
 import SignInScreen from "../../src/Authentication/SignInScreen.js";
 import SignUpScreen from "../../src/Authentication/SignUpScreen.js";
 import MainTabs from "./MainTab.js";
 import EditProfile from "../compo/Edit.js";
+import Notifications from "../compo/NotificationScreen.js";
+import TermsOfServicePage from '../compo/RulesPage/TermsOfServices.js'
+import CookieeSession from '../compo/RulesPage/CookieeSession.js'
+import PrivacyPage from '../compo/RulesPage/PrivacyPage.js'
+import CookiesPolicyPage from "../compo/RulesPage/CookieeSession.js";
+import NotificationsScreen from "../compo/NotificationScreen.js";
 
 const Stack = createNativeStackNavigator();
 
 export default function RootStack() {
   const dispatch = useDispatch();
-  const { user, token } = useSelector((state) => state.signUpAuth);
+  const { user, token } = useSelector((state) => state.signUpAuth || {});
   const [loading, setLoading] = useState(true);
 
+  // 🔹 Log auth state changes for debugging
   useEffect(() => {
-    const loadUser = async () => {
+    console.log("🔄 RootStack: Auth state changed", {
+      hasUser: !!user,
+      hasToken: !!token,
+    });
+  }, [user, token]);
+
+  // 🔹 Load auth from AsyncStorage / localStorage
+  useEffect(() => {
+    const loadAuthFromStorage = async () => {
       try {
-        const storedToken = await SecureStore.getItemAsync("token");
-        const storedUser = await SecureStore.getItemAsync("user");
+        let storedToken = null;
+        let storedUser = null;
+
+        if (Platform.OS === "web") {
+          storedToken = localStorage.getItem("token");
+          storedUser = localStorage.getItem("user");
+        } else {
+          storedToken = await AsyncStorage.getItem("token");
+          storedUser = await AsyncStorage.getItem("user");
+        }
+
+        console.log("📦 Loaded from storage:", {
+          hasToken: !!storedToken,
+          hasUser: !!storedUser,
+        });
 
         if (storedToken && storedUser) {
           dispatch(
@@ -33,15 +61,16 @@ export default function RootStack() {
           );
         }
       } catch (err) {
-        console.warn("Error loading stored user:", err);
+        console.warn("❌ RootStack: error loading auth from storage:", err);
       } finally {
-        setLoading(false); // finish loading only after checking storage
+        setLoading(false);
       }
     };
 
-    loadUser();
+    loadAuthFromStorage();
   }, [dispatch]);
 
+  // 🔹 Show loading indicator while checking auth
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -49,21 +78,33 @@ export default function RootStack() {
       </View>
     );
   }
-{console.log(user,token,"token")}
+
+  // 🔹 Conditionally render stacks based on auth state
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-       {/* <Stack.Screen name="MainTabs" component={MainTabs} />
-         <Stack.Screen name="EditProfile" component={EditProfile} /> */}
       {user && token ? (
+        // ✅ Authenticated stack
         <>
-        <Stack.Screen name="Home" component={MainTabs} />
-       
+        
+          <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="EditProfile" component={EditProfile} />
+        <Stack.Screen 
+  name="Notifications" 
+  component={NotificationsScreen}
+  options={{ headerShown: false }}
+/>
         </>
       ) : (
+        // ✅ Unauthenticated stack
         <>
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+   <Stack.Screen name="SignUp" component={SignUpScreen} />
+          {/* <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} /> */}
           <Stack.Screen name="SignIn" component={SignInScreen} />
-          <Stack.Screen name="SignUp" component={SignUpScreen} />
+       
+          <Stack.Screen name="TermsOfService" component={TermsOfServicePage} />
+<Stack.Screen name="PrivacyPolicy" component={PrivacyPage} />
+<Stack.Screen name="CookiesPolicy" component={CookiesPolicyPage} />
+
         </>
       )}
     </Stack.Navigator>

@@ -1,20 +1,10 @@
-// src/redux/slices/reelNewDrop.js
-//
-// WARNING / NOTES:
-// - This slice now normalizes and upserts updated reels into BOTH `reels` and `mainPageReels`
-//   so UI components that read from either array will see updated like/comment data.
-// - The commentOnReel thunk expects the backend to return the updated reel object. If your
-//   backend returns `{ reel: {...} }`, this code will handle that. If the backend returns
-//   a different shape, adapt the thunk's `return` accordingly.
-// - If running on a physical device, replace `localhost` with your machine IP in BASE_URL.
-// - Keep your backend endpoints consistent with the URLs below. Adjust BASE_URL if needed.
-//
-// Full updated slice file below (no code omitted):
-
+// ✅ src/redux/slices/reelNewDrop.js — FINAL FIXED VERSION
+import API_CONFIG from "../../../config/api";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const BASE_URL = "http://localhost:8000/api/reels";
+const BASE_URL = "https://finallaunchbackend.onrender.com/api/reels";
 
 /* ---------------------------------
    FETCH REELS BY USER ID
@@ -22,10 +12,16 @@ const BASE_URL = "http://localhost:8000/api/reels";
 export const fetchReelsByUserId = createAsyncThunk(
   "reelNewDrop/fetchReelsByUserId",
   async (userId, thunkAPI) => {
+    // console.log("userId", userId);
     try {
       const { data } = await axios.get(`${BASE_URL}/user/${userId}`);
+      // console.log(data, "fetched reels");
       return data; // array of reels
     } catch (error) {
+      // ✅ Treat 404 as "no reels" (empty array)
+      if (error.response && error.response.status === 404) {
+        return [];
+      }
       return thunkAPI.rejectWithValue(
         error.response?.data || error.message || "Fetch failed"
       );
@@ -54,10 +50,10 @@ export const fetchAllReels = createAsyncThunk(
 export const fetchReels = createAsyncThunk(
   "reelNewDrop/fetchReels",
   async (_, thunkAPI) => {
-    const token = localStorage.getItem("token");
-    if (!token) return thunkAPI.rejectWithValue("No token found");
-
     try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) return thunkAPI.rejectWithValue("No token found");
+
       const { data } = await axios.get(`${BASE_URL}/getNewReelDrop`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -74,16 +70,15 @@ export const fetchReels = createAsyncThunk(
 export const toggleLikeReel = createAsyncThunk(
   "reelNewDrop/toggleLikeReel",
   async ({ reelId }, thunkAPI) => {
-    const token = localStorage.getItem("token");
-    if (!token) return thunkAPI.rejectWithValue("No token found");
-
     try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) return thunkAPI.rejectWithValue("No token found");
+
       const { data } = await axios.post(
         `${BASE_URL}/${reelId}/like`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      // Expect backend to return the updated reel object
       return data;
     } catch (error) {
       return thunkAPI.rejectWithValue(error.response?.data || error.message);
@@ -94,12 +89,11 @@ export const toggleLikeReel = createAsyncThunk(
 /* ---------------------------------
    ADD COMMENT TO A REEL
 ---------------------------------- */
-// NOTE: using consistent action type "reelNewDrop/commentOnReel"
 export const commentOnReel = createAsyncThunk(
   "reelNewDrop/commentOnReel",
   async ({ reelId, text }, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem("token");
+      const token = await AsyncStorage.getItem("token");
       if (!token) return rejectWithValue("No token found");
 
       const { data } = await axios.post(
@@ -107,10 +101,6 @@ export const commentOnReel = createAsyncThunk(
         { text },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      // backend ideally returns the updated reel object. Accept either:
-      // - data.reel
-      // - data (if it's the reel directly)
       return data.reel ?? data;
     } catch (error) {
       return rejectWithValue(
@@ -124,20 +114,14 @@ export const commentOnReel = createAsyncThunk(
    Helper: upsert/replace updated reel in arrays
 ---------------------------------- */
 function upsertReelToStateArrays(state, payloadReel) {
-  const r = payloadReel?.reel ?? payloadReel; // handle both shapes
+  const r = payloadReel?.reel ?? payloadReel;
   if (!r || !r._id) return;
 
-  // Update or insert into provided array (mutates state arrays)
   const replaceInArray = (arr) => {
     if (!Array.isArray(arr)) return;
     const idx = arr.findIndex((item) => item._id === r._id);
-    if (idx !== -1) {
-      // merge to keep other fields intact when possible
-      arr[idx] = { ...arr[idx], ...r };
-    } else {
-      // Insert at start so new/updated reels appear first
-      arr.unshift(r);
-    }
+    if (idx !== -1) arr[idx] = { ...arr[idx], ...r };
+    else arr.unshift(r);
   };
 
   replaceInArray(state.reels);
@@ -156,11 +140,17 @@ const reelNewDrop = createSlice({
     error: null,
   },
   reducers: {
-    // (optional) local synchronous reducers can be added here if needed later
+    // ✅ NEW: Clear all reels when user logs out or signs up
+    clearReelState: (state) => {
+      state.mainPageReels = [];
+      state.reels = [];
+      state.loading = false;
+      state.error = null;
+    },
   },
   extraReducers: (builder) => {
-    /* fetchReelsByUserId */
     builder
+      /* ---------- fetchReelsByUserId ---------- */
       .addCase(fetchReelsByUserId.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -171,11 +161,11 @@ const reelNewDrop = createSlice({
       })
       .addCase(fetchReelsByUserId.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload || action.error?.message;
-      });
+        state.error =
+          action.payload || action.error?.message || "Failed to fetch reels by user";
+      })
 
-    /* fetchAllReels */
-    builder
+      /* ---------- fetchAllReels ---------- */
       .addCase(fetchAllReels.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -186,11 +176,11 @@ const reelNewDrop = createSlice({
       })
       .addCase(fetchAllReels.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload || action.error?.message;
-      });
+        state.error =
+          action.payload || action.error?.message || "Failed to fetch all reels";
+      })
 
-    /* fetchReels (user's reels) */
-    builder
+      /* ---------- fetchReels (logged-in user) ---------- */
       .addCase(fetchReels.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -201,30 +191,26 @@ const reelNewDrop = createSlice({
       })
       .addCase(fetchReels.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload || action.error?.message;
-      });
+        state.error =
+          action.payload || action.error?.message || "Failed to fetch user reels";
+      })
 
-    /* toggleLikeReel */
-    builder
+      /* ---------- toggleLikeReel ---------- */
       .addCase(toggleLikeReel.pending, (state) => {
-        // keep optimistic UI to components; server response will update state
         state.error = null;
       })
       .addCase(toggleLikeReel.fulfilled, (state, action) => {
-        // action.payload should be updated reel (or { reel: updatedReel })
         upsertReelToStateArrays(state, action.payload);
       })
       .addCase(toggleLikeReel.rejected, (state, action) => {
         state.error = action.payload || action.error?.message;
-      });
+      })
 
-    /* commentOnReel */
-    builder
+      /* ---------- commentOnReel ---------- */
       .addCase(commentOnReel.pending, (state) => {
         state.error = null;
       })
       .addCase(commentOnReel.fulfilled, (state, action) => {
-        // action.payload should be the updated reel
         upsertReelToStateArrays(state, action.payload);
       })
       .addCase(commentOnReel.rejected, (state, action) => {
@@ -233,4 +219,8 @@ const reelNewDrop = createSlice({
   },
 });
 
+/* ---------------------------------
+   EXPORTS
+---------------------------------- */
+export const { clearReelState } = reelNewDrop.actions;
 export default reelNewDrop.reducer;

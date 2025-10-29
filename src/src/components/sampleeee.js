@@ -1,15 +1,4 @@
-// Sampleeee.js (React Native)
-// NOTE: This file expects your RegularReels component to accept these props:
-//   - activeIndex (number)
-//   - isPlaying (boolean)    // global play/pause for the room
-//   - onTogglePlay(index, newState) // callback when admin toggles play
-//   - isAdmin, socket, room, chat, username, onOpenChat
-//
-// RegularReels should use react-native-video's `paused` prop like:
-//   paused={!(index === activeIndex && isPlaying)}
-//
-// Also ensure your server broadcasts play state with io.to(room).emit(...)
-
+// src/screens/Sampleeee.js - FULL FIXED VERSION (Admin Scroll & Sync + Scroll Lock + Room Closed Modal)
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -18,66 +7,77 @@ import {
   TouchableOpacity,
   TextInput,
   Image,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
   Dimensions,
   Animated,
+  FlatList,
+  Modal,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { showLocalNotification } from '../../services/Notification/pushNotifications.js';
 import { io } from "socket.io-client";
 import { useSelector, useDispatch } from "react-redux";
-import { fetchAllReels } from "../Redux/Slices/Profile/reelNewDrop.js";
+import { fetchAllReels } from "../../Redux/Slice/Profile/reelNewDrop.js";
 import RegularReels from "../../compo/ReelChat/RegularReels.js";
-import OnlineUsersSuggestions from "./SubComponents/ReelChat/OnlineUsersSuggestions.js";
+import OnlineUsersSuggestions from "../../compo/ReelChat/OnlineUsersSuggestions.js";
 import Icon from "react-native-vector-icons/Ionicons";
-import { Audio } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
+import { useNavigation } from "@react-navigation/native";
+import NotificationBadge from "../../compo/Notification/NotificationBadge.js";
+import { getSocket } from '../../services/socketService.js';
 
-const socket = io("http://192.168.2.16:8000");
-const { width, height } = Dimensions.get("window");
+const socket = getSocket(); // ✅ Use centralized socket
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-export default function Sampleeee() {
+export default function Sampleeee({ onNavigateToProfile, setHideBottomNav }) {
   const dispatch = useDispatch();
+  const navigation = useNavigation();
 
   const signUpUserName = useSelector(
     (state) => state.signUpAuth?.user?.username ?? ""
   );
   const userId = useSelector((state) => state.signUpAuth?.user?._id);
-  const profileImage = useSelector(
-    (state) => state.profileInformation?.profileImage
-  );
 
-  const [whoIsAdmin, setWhoIsAdmin] = useState("");
   const [username, setUsername] = useState(signUpUserName);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [chatWith, setChatWith] = useState("");
-  const [room, setRoom] = useState("");
+  const [room, setRoom] = useState(null);
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-
-  // Single source-of-truth for play/pause state in this room
-  const [isPlaying, setIsPlaying] = useState(true); // default: play on load
-
-  // refs
-  const videoRefs = useRef([]); // optional: store refs if you want to seek
+  const [isPlaying, setIsPlaying] = useState(true);
+  const videoRefs = useRef([]);
   const reelsScrollRef = useRef(null);
   const chatEndRef = useRef(null);
-  const recordingRef = useRef(null);
-
-  const [isRecording, setIsRecording] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
-  const slideAnim = useRef(new Animated.Value(width)).current;
+  const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const lastSyncedIndex = useRef(0);
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [incomingInviteFrom, setIncomingInviteFrom] = useState(null);
+  const currentReel = useSelector(
+    (state) => state.reelNewDrop?.reels?.[activeIndex]
+  );
 
+  const [roomClosedMessage, setRoomClosedMessage] = useState(null);
+// ADD THIS STATE:
+const [notificationCount, setNotificationCount] = useState(0);
   const reels = useSelector((state) => state.reelNewDrop.mainPageReels || []);
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredUsers = onlineUsers.filter(
+    (u) =>
+      u.username.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      u.username !== username
+  );
 
-  // Fetch reels on mount
+
+  // ------------------- FETCH REELS -------------------
   useEffect(() => {
     dispatch(fetchAllReels());
   }, [dispatch]);
 
-  // Register socket user
+  // ------------------- REGISTER USER -------------------
   useEffect(() => {
     if (signUpUserName && userId) {
       socket.emit("register", { username: signUpUserName, userId });
@@ -85,7 +85,41 @@ export default function Sampleeee() {
     }
   }, [signUpUserName, userId]);
 
-  // Receive chat messages
+  // ------------------- VIDEO CONTROL -------------------
+  const playActiveVideo = (index) => {
+    videoRefs.current.forEach((ref, idx) => {
+      if (!ref) return;
+      try {
+        if (idx === index && isPlaying) ref.playAsync?.();
+        else ref.pauseAsync?.();
+      } catch (e) {
+        console.log("Video play/pause error:", e.message);
+      }
+    });
+  };
+
+  // ✅ UPDATED: Navigate to user's profile using onNavigateToProfile callback
+  const goToProfile = async (userId) => {
+    if (!userId) return;
+
+    // reset local UI state so previous reels don't persist
+    setActiveIndex(0);
+    videoRefs.current = [];
+
+    // fetch reels for selected user (this will replace existing reels in Redux)
+    await dispatch(fetchAllReels(userId));
+
+    // navigate (or call callback) after reels are updated
+    if (onNavigateToProfile) onNavigateToProfile(userId);
+  };
+
+
+
+  useEffect(() => {
+    playActiveVideo(activeIndex);
+  }, [activeIndex, isPlaying, videoRefs.current]);
+
+  // ------------------- CHAT SOCKET -------------------
   useEffect(() => {
     const handleReceiveMessage = ({ sender, message }) => {
       let parsed = null;
@@ -99,73 +133,106 @@ export default function Sampleeee() {
     return () => socket.off("receive_message", handleReceiveMessage);
   }, []);
 
-  // Handle socket events (index & play state syncing + others)
+  // ------------------- SOCKET EVENTS -------------------
   useEffect(() => {
-    // Active users list
     socket.on("active_users", (users) => setOnlineUsers(users));
 
-    // Invite flow
-    socket.on("receive_invite", ({ from }) => {
-      // In React Native you probably want Alert.alert; keeping confirm as in your original:
-      if (typeof confirm === "function") {
-        if (confirm(`Accept chat request from ${from}?`)) {
-          socket.emit("accept_invite", { from });
-          setChatWith(from);
-          setWhoIsAdmin(from);
+  //   socket.on("receive_invite", ({ from }) => {
+  //     setIncomingInviteFrom(from);
+  //     setInviteModalVisible(true);
+  //      // Show local notification
+  // showLocalNotification(
+  //   "ReelChatt Invite",
+  //   `${from} wants to watch reels with you!`
+  // );
+  //   });
+    // ✅ ADD THIS INSTEAD - Just update badge count
+  socket.on("receive_invite", ({ from }) => {
+    setNotificationCount((prev) => prev + 1);
+    showLocalNotification(
+      "ReelChatt Invite",
+      `${from} wants to watch reels with you!`
+    );
+  });
+   socket.on("pending_invites", (invites) => {
+    setNotificationCount(invites.length);
+  });
+
+    socket.on(
+      "invite_accepted",
+      ({ by, from, room: newRoom, isAdmin: inviterIsAdmin, currentReelIndex }) => {
+        setRoom(newRoom);
+        setChatWith(by === username ? from : by);
+        setIsAdmin(inviterIsAdmin ?? false);
+
+        if (inviterIsAdmin) {
+          lastSyncedIndex.current = activeIndex;
+          setTimeout(() => {
+            socket.emit("sync_reel_index", { room: newRoom, index: activeIndex });
+            socket.emit("reel_play", {
+              room: newRoom,
+              index: activeIndex,
+              isPlaying: true,
+            });
+          }, 100);
+        } else if (currentReelIndex != null) {
+          lastSyncedIndex.current = currentReelIndex;
+          setActiveIndex(currentReelIndex);
+          setIsPlaying(true);
+          setTimeout(() => scrollToIndex(currentReelIndex), 50);
         }
-      } else {
-        // fallback auto-accept (or implement RN Alert)
-        socket.emit("accept_invite", { from });
-        setChatWith(from);
-        setWhoIsAdmin(from);
+      }
+    );
+
+    socket.on(
+      "joined_room",
+      ({ room: newRoom, isAdmin: joinedIsAdmin, currentReelIndex }) => {
+        setRoom(newRoom);
+        setIsAdmin(joinedIsAdmin ?? false);
+
+        if (!joinedIsAdmin && currentReelIndex != null) {
+          lastSyncedIndex.current = currentReelIndex;
+          setActiveIndex(currentReelIndex);
+          setIsPlaying(true);
+          setTimeout(() => scrollToIndex(currentReelIndex), 50);
+        }
+      }
+    );
+
+    socket.on("sync_reel_index", ({ index }) => {
+      if (!isAdmin && index !== lastSyncedIndex.current) {
+        lastSyncedIndex.current = index;
+        setActiveIndex(index);
+        setIsPlaying(true);
+        setTimeout(() => scrollToIndex(index), 50);
       }
     });
 
-    socket.on("invite_accepted", ({ by, from, room: newRoom, isAdmin: inviterIsAdmin }) => {
-      setRoom(newRoom);
-      setChatWith(by === username ? from : by);
-      // server tells inviter whether they are admin
-      setIsAdmin(inviterIsAdmin ?? false);
-    });
-
-    socket.on("joined_room", ({ room: newRoom, isAdmin: joinedIsAdmin }) => {
-      setRoom(newRoom);
-      setIsAdmin(joinedIsAdmin ?? false);
-    });
-
-    // admin changed index -> viewers should scroll to it (server also typically emits this)
-    socket.on("sync_reel_index", (index) => {
-      setActiveIndex(index);
-      // make viewer scroll (for non-admin viewers)
-      if (!isAdmin && reelsScrollRef.current) {
-        try {
-          reelsScrollRef.current.scrollTo({ y: index * height, animated: true });
-        } catch (err) {
-          // ignore if not supported on platform
-          console.log("scrollTo error:", err?.message || err);
-        }
-      }
-    });
-
-    // broadcasted play/pause state (server should send to everyone using io.to(room).emit)
     socket.on("reel_play_state", ({ index, isPlaying: playFlag }) => {
-      // update remote authoritative state
-      setActiveIndex((prevIdx) => {
-        // if admin emitted play for a different index, it's OK to update activeIndex
-        if (index != null && index !== prevIdx) {
-          // scroll non-admins to new index
-          if (!isAdmin && reelsScrollRef.current) {
-            try {
-              reelsScrollRef.current.scrollTo({ y: index * height, animated: true });
-            } catch (err) { }
-          }
-          return index;
-        }
-        return prevIdx;
-      });
+      if (!isAdmin) {
+        setActiveIndex(index);
+        setIsPlaying(Boolean(playFlag));
+        setTimeout(() => scrollToIndex(index), 50);
+      }
+    });
 
-      // update playing flag for everyone (single source of truth)
-      setIsPlaying(Boolean(playFlag));
+    // ---------- ADMIN LEFT EVENT ----------
+    socket.on("admin_left", ({ adminName }) => {
+      if (!isAdmin) {
+        setRoomClosedMessage("Admin closed the room");
+      } else {
+        setRoomClosedMessage("You left the room");
+      }
+
+      setTimeout(() => {
+        setRoom(null);
+        setIsAdmin(false);
+        setChatWith("");
+        setChat([]);
+        setActiveIndex(0);
+        setRoomClosedMessage(null);
+        navigation.goBack?.();
+      }, 1500);
     });
 
     return () => {
@@ -175,55 +242,143 @@ export default function Sampleeee() {
       socket.off("joined_room");
       socket.off("sync_reel_index");
       socket.off("reel_play_state");
+      socket.off("admin_left");
     };
-  }, [isAdmin, username]);
+  }, [isAdmin, username, activeIndex, navigation]);
+// ADD THIS TO FETCH NOTIFICATION COUNT ON SCREEN FOCUS:
+useFocusEffect(
+  React.useCallback(() => {
+    if (username) {
+      socket.emit("get_pending_invites", { username });
+    }
+  }, [username])
+);
+  // ------------------- SCROLL TO INDEX -------------------
+  const scrollToIndex = (index) => {
+    if (!reelsScrollRef.current || reels.length === 0) return;
+    const safeIndex = Math.min(Math.max(0, index), reels.length - 1);
+    try {
+      reelsScrollRef.current.scrollToIndex({
+        index: safeIndex,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    } catch {
+      setTimeout(() => {
+        try {
+          reelsScrollRef.current.scrollToIndex({
+            index: safeIndex,
+            animated: true,
+            viewPosition: 0.5,
+          });
+        } catch (e) {
+          console.log("Scroll retry failed:", e.message);
+        }
+      }, 100);
+    }
+  };
 
-  // When a user (admin only) toggles play/pause in the UI,
-  // parent handles the single source of truth and emits to server.
+  // ------------------- AUTO SCROLL NON-ADMINS -------------------
+  useEffect(() => {
+    if (!isAdmin) scrollToIndex(activeIndex);
+  }, [activeIndex, isAdmin]);
+
+  // ------------------- TOGGLE PLAY -------------------
   const handleTogglePlay = (index, newState) => {
-    // update local state for instant feedback
-    setIsPlaying(Boolean(newState));
-
-    // emit authoritative play/pause to server — server should broadcast to everyone
+    if (!isAdmin) return;
+    const playState = Boolean(newState);
+    setIsPlaying(playState);
     if (room) {
-      socket.emit("reel_play", { room, index, isPlaying: Boolean(newState) });
+      socket.emit("reel_play", { room, index, isPlaying: playState });
     }
   };
 
-  // When admin scrolls reels -> change index and ensure playback state is broadcast
-  const onScroll = (event) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const newIndex = Math.round(offsetY / height);
-    if (newIndex !== activeIndex) {
-      setActiveIndex(newIndex);
-      if (isAdmin && room) {
-        // admin changes index: broadcast index change and ensure everyone plays that reel
-        socket.emit("change_reel_index", { room, index: newIndex });
-        // set playing true when admin scrolls to a new reel (optional: keep same playing state if you prefer)
-        setIsPlaying(true);
-        socket.emit("reel_play", { room, index: newIndex, isPlaying: true });
-      }
-    }
-  };
+  // ------------------- VIEWABLE ITEMS -------------------
+  // const onViewableItemsChanged = 
+  // useRef(({ viewableItems }) => {
+  //   if (!viewableItems.length) return;
+  //   const newIndex = viewableItems[0].index;
+  //   setActiveIndex(newIndex);
+  //   setIsPlaying(true);
+  //   if (isAdmin && room) {
+  //     socket.emit("sync_reel_index", { room, index: newIndex });
+  //     socket.emit("reel_play", { room, index: newIndex, isPlaying: true });
+  //   }
+  // }).current;
 
+  // const viewabilityConfig = useRef({
+  //   itemVisiblePercentThreshold: 50,
+  //   minimumViewTime: 50,
+  // }).current;
+
+  // ------------------- VIEWABLE ITEMS -------------------
+  // ------------------- VIEWABLE ITEMS -------------------
+  // ------------------- VIEWABLE ITEMS -------------------
+  // ------------------- VIEWABLE ITEMS -------------------
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (!viewableItems.length) return;
+    const newIndex = viewableItems[0].index;
+
+    // Always update local state
+    setActiveIndex(newIndex);
+    setIsPlaying(true);
+  }).current;
+
+  // ✅ SEPARATE useEffect to handle admin sync when activeIndex changes
+  useEffect(() => {
+    // Only sync if we're admin, in a room, and index actually changed
+    if (isAdmin && room && activeIndex !== lastSyncedIndex.current) {
+      lastSyncedIndex.current = activeIndex;
+
+      console.log(`🔄 Admin scrolled to index ${activeIndex}, syncing to room ${room}`);
+
+      // Sync the new index
+      socket.emit("sync_reel_index", { room, index: activeIndex });
+
+      // Auto-play the new reel
+      socket.emit("reel_play", { room, index: activeIndex, isPlaying: true });
+    }
+  }, [activeIndex, isAdmin, room]); // ✅ Dependencies ensure we always have current values
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 50,
+  }).current;
+
+  // ------------------- INVITE & CHAT -------------------
   const sendInvite = (to) => {
     if (!username) return;
     socket.emit("send_invite", { to, from: username });
   };
-
+  const acceptInvite = () => {
+    if (!incomingInviteFrom) return;
+    socket.emit("accept_invite", { from: incomingInviteFrom });
+    setChatWith(incomingInviteFrom);
+    setInviteModalVisible(false);
+    setIncomingInviteFrom(null);
+  };
+  const declineInvite = () => {
+    setInviteModalVisible(false);
+    setIncomingInviteFrom(null);
+  };
   const sendMessage = () => {
     if (message.trim() && room) {
-      socket.emit("send_message", { room, message, sender: username });
+      socket.emit("send_message", {
+        room,
+        message,
+        sender: username,
+      });
       setMessage("");
     }
   };
-
   const sendMediaMessage = ({ type, data, name }) => {
     if (!room) return;
-    const payload = JSON.stringify({ type, data, name });
-    socket.emit("send_message", { room, message: payload, sender: username });
+    socket.emit("send_message", {
+      room,
+      message: JSON.stringify({ type, data, name }),
+      sender: username,
+    });
   };
-
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -239,25 +394,6 @@ export default function Sampleeee() {
     }
   };
 
-  const handleRecording = async () => {
-    if (!isRecording) {
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) return;
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(
-        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
-      );
-      await recording.startAsync();
-      recordingRef.current = recording;
-      setIsRecording(true);
-    } else {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      sendMediaMessage({ type: "audio", data: uri, name: "recording.m4a" });
-      setIsRecording(false);
-    }
-  };
-
   const renderMessageContent = (item) => {
     const { parsed, message } = item;
     if (parsed?.type === "image")
@@ -267,7 +403,6 @@ export default function Sampleeee() {
           style={{ width: 200, height: 200, borderRadius: 8 }}
         />
       );
-    if (parsed?.type === "audio") return <Text>[Audio message]</Text>;
     return <Text>{message}</Text>;
   };
 
@@ -279,255 +414,453 @@ export default function Sampleeee() {
       useNativeDriver: true,
     }).start();
   };
-
   const closeChat = () => {
     Animated.timing(slideAnim, {
-      toValue: width,
+      toValue: SCREEN_WIDTH,
       duration: 300,
       useNativeDriver: true,
     }).start(() => setChatVisible(false));
   };
 
-  if (!username) return <Text>Loading...</Text>;
+  // ------------------- LEAVE ROOM (ADMIN) -------------------
+  const handleLeaveRoom = () => {
+    setChatVisible(false)
+    if (room && isAdmin) socket.emit("admin_left_room",
+      { room });
+  };
 
+  // ------------------- HIDE BOTTOM NAV -------------------
+  useEffect(() => {
+    if (setHideBottomNav) setHideBottomNav(!!room);
+  }, [room, setHideBottomNav]);
+
+  // ------------------- LOADING -------------------
+  if (!username)
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Loading...</Text>
+      </View>
+    );
+
+  // ------------------- NO ROOM VIEW -------------------
   if (!room) {
     return (
-      <ScrollView style={styles.container}>
-        <Text style={styles.title}>ReelChatt</Text>
-        <Text style={styles.subtitle}>Online Users...</Text>
-        {onlineUsers
-          .filter((u) => u.username !== username)
-          .map((u) => (
-            <View key={u.username} style={styles.userRow}>
-              {u.profileImage ? (
-                <Image source={{ uri: u.profileImage }} style={styles.avatar} />
-              ) : (
-                <Icon name="person-circle" size={40} />
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.username}>{u.username}</Text>
-                <Text style={styles.bio}>{u.bio || "Bio"}</Text>
+      <>
+        <FlatList
+          style={{ backgroundColor: "#fff" }}
+          data={[]}
+          ListHeaderComponent={
+            <>
+              <View style={styles.headerContainer}>
+                <Text style={styles.headerTitle}>ReelChatt</Text>
+               {/* <View style={styles.notificationBadgeContainer}>
+    <NotificationBadge />
+  </View>*/}
+  <TouchableOpacity
+    style={styles.notificationButton}
+    onPress={() => navigation.navigate("Notifications")}
+  >
+    <Icon name="notifications" size={28} color="#000" />
+    {notificationCount > 0 && (
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>
+          {notificationCount > 9 ? "9+" : notificationCount}
+        </Text>
+      </View>
+    )}
+  </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.inviteButton}
-                onPress={() => sendInvite(u.username)}
-              >
-                <Text style={{ color: "white" }}>Invite</Text>
-              </TouchableOpacity>
+              <View style={styles.bodyContainer}>
+                {/* <Text style={styles.subtitle}>Online Users...</Text> */}
+
+                {/* ----------------------------------------------------------- */}
+
+                <View style={styles.bodyContainer}>
+                  <Text style={styles.subtitle}>Online Users...</Text>
+
+                  {/* 🔍 Search Bar */}
+                  <View style={styles.searchContainer}>
+                    <Icon name="search" size={20} color="#555" style={{ marginRight: 8 }} />
+                    <TextInput
+                      placeholder="Search users..."
+                      placeholderTextColor="#888"
+                      style={styles.searchInput}
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                    />
+                  </View>
+
+                  {filteredUsers.map((u) => (
+                    <View key={u.username} style={styles.userRow}>
+                      {u.profileImage ? (
+                        <Image source={{ uri: u.profileImage }} style={styles.avatar} />
+                      ) : (
+                        <Icon style={styles.avatar} name="person-circle" size={80} />
+                      )}
+                      <View style={styles.userTextContainer}>
+                        <Text style={styles.username} numberOfLines={1}>
+                          {u.username}
+                        </Text>
+                        <Text style={styles.bio}>{u.bio || "Bio"}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.inviteButton}
+                        onPress={() => sendInvite(u.username)}
+                      >
+                        <Text style={{ color: "white" }}>Invite</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  <Text style={styles.subtitle}>Suggestions...</Text>
+                  <OnlineUsersSuggestions goToProfile={goToProfile} />
+                </View>
+
+
+                {/* --------------------------------------------------------------------- */}
+                {/* {onlineUsers
+                  .filter((u) => u.username !== username)
+                  .map((u) => (
+                    <View key={u.username} style={styles.userRow}>
+                      {u.profileImage ? (
+                        <Image
+                          source={{ uri: u.profileImage }}
+                          style={styles.avatar}
+                        />
+                      ) : (
+                        <Icon
+                          style={styles.avatar}
+                          name="person-circle"
+                          size={80}
+                        />
+                      )}
+                      <View style={styles.userTextContainer}>
+                        <Text
+                          style={styles.username}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {u.username}
+                        </Text>
+                        <Text style={styles.bio}>{u.bio || "Bio"}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.inviteButton}
+                        onPress={() => sendInvite(u.username)}
+                      >
+                        <Text style={{ color: "white" }}>Invite</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                <Text style={styles.subtitle}>Suggestions...</Text>
+                <OnlineUsersSuggestions goToProfile={goToProfile} /> */}
+              </View>
+            </>
+          }
+          keyExtractor={() => "dummy"}
+          showsVerticalScrollIndicator={false}
+        />
+
+      {/*  <Modal transparent visible={inviteModalVisible} animationType="fade">
+          <View style={styles.modalBackground}>
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitle}>
+                {incomingInviteFrom} invited you to join a reel chat!
+              </Text>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.acceptButton}
+                  onPress={acceptInvite}
+                >
+                  <Text style={styles.modalButtonText}>Accept</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.declineButton}
+                  onPress={declineInvite}
+                >
+                  <Text style={styles.modalButtonText}>Decline</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          ))}
-        <Text style={styles.subtitle}>Suggestions...</Text>
-        <OnlineUsersSuggestions />
-      </ScrollView>
+          </View>
+        </Modal>*/}
+      </>
     );
   }
 
+  // ------------------- ROOM VIEW -------------------
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={{ flexDirection: "row", flex: 1 }}>
-        <View style={{ flex: 1 }}>
-          {/* Admin only can scroll & control; viewers are passive */}
-          <View style={{ flex: 1 }} pointerEvents={isAdmin ? "auto" : "none"}>
-            <ScrollView
-              ref={reelsScrollRef}
-              pagingEnabled
-              onScroll={isAdmin ? onScroll : undefined}
-              scrollEventThrottle={16}
-              showsVerticalScrollIndicator={false}
-              style={styles.reelsWrapper}
-              scrollEnabled={isAdmin}
-            >
-              {reels.map((item, idx) => (
-                <View key={item._id || idx} style={styles.singleReel}>
-                  <RegularReels
-                    reel={item}
-                    index={idx}
-                    activeIndex={activeIndex}
-                    isPlaying={isPlaying} // <-- SINGLE SOURCE OF TRUTH
-                    onTogglePlay={(index, newState) => handleTogglePlay(index, newState)}
-                    setVideoRef={(ref) => (videoRefs.current[idx] = ref)}
-                    isAdmin={isAdmin}
-                    socket={socket}
-                    room={room}
-                    chat={chat}
-                    username={username}
-                    onOpenChat={openChat}
-                  />
-                </View>
-              ))}
-            </ScrollView>
+      {/* ROOM CLOSED MESSAGE MODAL */}
+      <Modal transparent visible={!!roomClosedMessage} animationType="fade">
+        <View style={styles.modalBackground}>
+          <View style={styles.roomClosedModal}>
+            <Text style={{ fontSize: 16, fontWeight: "600", textAlign: "center" }}>
+              {roomClosedMessage}
+            </Text>
           </View>
-
-          {/* Floating Chat Button */}
-          <TouchableOpacity style={styles.chatButton} onPress={openChat}>
-            <Text style={styles.chatButtonText}>💬</Text>
-          </TouchableOpacity>
         </View>
+      </Modal>
 
-        {chatVisible && (
-          <Animated.View
-            style={[styles.chatPanel, { transform: [{ translateX: slideAnim }] }]}
-          >
-            <View style={styles.chatHeader}>
-                <TouchableOpacity onPress={closeChat}>
-                <Icon name="arrow-back" size={24} />
-              </TouchableOpacity>
-              <View style={styles.chatHeaderKrishaa}>
-                <Text style={styles.chatTitle}>ReelChatt with {chatWith}</Text>
-                <Text style={{ fontSize: 14, color: "gray" }}>
-                  {isAdmin ? "You are the admin" : `${chatWith} is the admin`}
-                </Text>
-              </View>
-            
-            </View>
+      {/* Leave Room Button */}
+      {isAdmin && (
+        <TouchableOpacity
+          style={styles.leaveButton}
+          onPress={handleLeaveRoom}
+        >
+          <Text style={styles.leaveButtonText}>Leave Room</Text>
+        </TouchableOpacity>
+      )}
 
-            <ScrollView
-              style={styles.messages}
-              ref={chatEndRef}
-              onContentSizeChange={() =>
-                chatEndRef.current?.scrollToEnd({ animated: true })
-              }
-            >
-              {chat.map((c, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.bubble,
-                    c.sender === username ? styles.sent : styles.received,
-                  ]}
-                >
-                  <Text style={styles.sender}>{c.sender}</Text>
-                  {renderMessageContent(c)}
-                </View>
-              ))}
-            </ScrollView>
-
-            <View style={styles.inputRow}>
-              <TouchableOpacity onPress={handleRecording}>
-                <Icon
-                  name="mic"
-                  size={28}
-                  color={isRecording ? "red" : "black"}
-                  style={{ marginHorizontal: 5 }}
-                />
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={pickImage}>
-                <Icon name="image" size={28} style={{ marginHorizontal: 5 }} />
-              </TouchableOpacity>
-
-              <TextInput
-                style={styles.input}
-                value={message}
-                onChangeText={setMessage}
-                placeholder="Type a message..."
-                onSubmitEditing={sendMessage}
-              />
-
-              <TouchableOpacity onPress={sendMessage}>
-                <Icon
-                  name="send"
-                  size={28}
-                  color="red"
-                  style={{ marginHorizontal: 5 }}
-                />
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+      <FlatList
+        key={isAdmin ? "admin" : "viewer"}
+        ref={reelsScrollRef}
+        data={reels}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={isAdmin}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        keyExtractor={(item, index) => item._id || index.toString()}
+        getItemLayout={(data, index) => ({
+          length: SCREEN_HEIGHT,
+          offset: SCREEN_HEIGHT * index,
+          index,
+        })}
+        snapToInterval={SCREEN_HEIGHT}
+        decelerationRate="fast"
+        initialNumToRender={2}
+        maxToRenderPerBatch={2}
+        windowSize={3}
+        removeClippedSubviews={false}
+        onLayout={() => playActiveVideo(activeIndex)}
+        renderItem={({ item, index }) => (
+          <View style={styles.singleReel}>
+            <RegularReels
+              reel={item}
+              index={index}
+              activeIndex={activeIndex}
+              isPlaying={index === activeIndex && isPlaying}
+              onTogglePlay={handleTogglePlay}
+              setVideoRef={(ref) => (videoRefs.current[index] = ref)}
+              isAdmin={isAdmin}
+              socket={socket}
+              room={room}
+              chat={chat}
+              username={username}
+              onOpenChat={openChat}
+            />
+          </View>
         )}
-      </View>
+      />
+
+      {!isAdmin && <View style={styles.touchBlocker} />}
+
+      {/* <TouchableOpacity
+        // style={[styles.chatButton, 
+        //   { zIndex: 30, elevation: 30 }]}
+        style={[styles.chatButton]}
+        onPress={openChat}
+      >
+        <Text style={styles.chatButtonText}>💬</Text>
+      </TouchableOpacity> */}
+     {!chatVisible && (
+  <TouchableOpacity
+    style={[styles.chatButton, styles.chatButtonAbove]}
+    onPress={openChat}
+    pointerEvents="auto"
+  >
+    <Text style={styles.chatButtonText}>💬</Text>
+  </TouchableOpacity>
+)}
+
+
+
+      {chatVisible && (
+        <Animated.View
+          style={[styles.chatPanel, { transform: [{ translateX: slideAnim }] }]}
+        >
+          <View style={styles.chatHeader}>
+            <TouchableOpacity onPress={closeChat}>
+              <Icon name="arrow-back" size={24} />
+            </TouchableOpacity>
+            <View style={styles.chatHeaderContent}>
+              <Text numberOfLines={1}
+  ellipsizeMode="tail" style={styles.chatTitle}>ReelChatt with {chatWith}</Text>
+              <Text style={styles.chatSubtitle}>
+                {isAdmin ? "You are the admin" : `${chatWith} is the admin`}
+              </Text>
+            </View>
+          </View>
+          <FlatList
+            data={chat}
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={({ item }) => (
+              <View
+                style={[
+                  styles.bubble,
+                  item.sender === username ? styles.sent : styles.received,
+                ]}
+              >
+                <Text style={styles.sender}>{item.sender}</Text>
+                {renderMessageContent(item)}
+              
+              </View>
+            )}
+            contentContainerStyle={{ padding: 10 }}
+            ref={chatEndRef}
+            onContentSizeChange={() =>
+              chatEndRef.current?.scrollToEnd({ animated: true })
+            }
+          />
+          <View style={styles.inputRow}>
+            <TouchableOpacity onPress={pickImage}>
+              <Icon name="image" size={28} 
+              style={{ marginHorizontal: 5 }} />
+            </TouchableOpacity>
+            <TextInput
+              style={styles.input}
+              value={message}
+              onChangeText={setMessage}
+              placeholder="Type a message..."
+              onSubmitEditing={sendMessage}
+            />
+            <TouchableOpacity onPress={sendMessage}>
+              <Icon
+                name="send"
+                size={28}
+                color="red"
+                style={{ marginHorizontal: 5 }}
+              />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
     </KeyboardAvoidingView>
   );
 }
 
+// ------------------- STYLES -------------------
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  title: {
-    fontSize: 26,
-    fontWeight: "bold",
+  
+chatButtonAbove: {
+  zIndex: 999,
+  elevation: 999, // Android
+},
+
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f2f2f2",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     marginVertical: 10,
-    textAlign: "center",
   },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#000",
+  },
+notificationBadgeContainer: {
+  position: "absolute",
+  top: 20,
+  right: 20,
+},
+ notificationButton: {
+    position: "absolute",
+    right: 20,
+    top: 20,
+  },
+  badge: {
+    position: "absolute",
+    right: -6,
+    top: -3,
+    backgroundColor: "#ff4444",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  badgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  headerContainer: {
+    backgroundColor: "#fff",
+    paddingTop: 20,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    elevation: 3,
+    position: "relative", // ADD THIS
+  },
+  container: { flex: 1, backgroundColor: "#000" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
+  headerContainer: { backgroundColor: "#fff", paddingTop: 20, paddingBottom: 15, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", elevation: 3 },
+  headerTitle: { fontSize: 28, fontWeight: "700", color: "#1a1a1a", textAlign: "center" },
   subtitle: { fontSize: 18, fontWeight: "600", marginTop: 15 },
   userRow: { flexDirection: "row", alignItems: "center", marginVertical: 8 },
-  avatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
-  username: { fontSize: 16, fontWeight: "600" },
+  avatar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+
+    width: 80, height: 80, borderRadius: 10
+  },
+  userTextContainer: { flex: 1, paddingLeft: 10, minWidth: 0 },
+  username: { fontSize: 16, fontWeight: "600", flexShrink: 1 },
   bio: { fontSize: 14, color: "gray" },
-  inviteButton: { backgroundColor: "green", padding: 8, borderRadius: 10 },
-
-  singleReel: {
-    height: height - 60,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  reelsWrapper: { flex: 1, height: "100%" },
-
-  chatButton: {
-    position: "absolute",
-    bottom: 20,
-    right: 20,
-    backgroundColor: "red",
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 5,
-  },
+  inviteButton: { backgroundColor: "green", padding: 8, borderRadius: 10, marginLeft: 10 },
+  singleReel: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT },
+  bodyContainer: { paddingHorizontal: 15, paddingBottom: 15, width: "100%" },
+  chatButton: { position: "absolute", bottom: 20, right: 20, backgroundColor: "red", width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", elevation: 5 },
   chatButtonText: { fontSize: 24, color: "white" },
-
-  chatPanel: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: width,
-    backgroundColor: "#fff",
-    borderLeftWidth: 1,
-    borderColor: "#ccc",
-    zIndex: 20,
-  },
-  chatHeaderKrishaa:{
-borderColor:"red",
-borderRadius:5,
-paddingLeft:25
-  },
-  chatHeader: {
-    flexDirection: "row",
-   
-    alignItems: "center",
-    padding: 10,
-    borderBottomWidth: 1,
-    borderColor: "#ccc",
-  },
-  chatTitle: { fontSize: 20, fontWeight: "bold" },
-  messages: { flex: 1, padding: 10 },
-  bubble: {
-    padding: 10,
-    borderRadius: 12,
-    marginVertical: 4,
-    maxWidth: "75%",
-  },
+  chatPanel: { 
+    // borderColor:"red",
+    // borderWidth:5,
+    // paddingVertical:10,
+    position: "absolute", 
+    top: 0, right: 0, bottom: 0, 
+    width: SCREEN_WIDTH, borderLeftWidth: 1,
+     borderColor: "#ccc", zIndex: 20, 
+     backgroundColor: "#fff"
+     },
+  chatHeaderContent: 
+  { paddingHorizontal: 25,
+    paddingVertical:10
+   },
+  chatHeader: { flexDirection: "row", alignItems: "center", padding: 10, borderBottomWidth: 1, borderColor: "#ccc" },
+  chatTitle: { fontSize: 20, fontWeight:450 },
+  chatSubtitle: { fontSize: 14, color: "gray" },
+  bubble: { padding: 10, borderRadius: 12, marginVertical: 4, maxWidth: "75%" },
   sent: { backgroundColor: "#dcf8c6", alignSelf: "flex-end" },
   received: { backgroundColor: "#f1f0f0", alignSelf: "flex-start" },
   sender: { fontSize: 12, fontWeight: "bold", marginBottom: 4 },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderColor: "#ddd",
-    paddingVertical: 5,
+  inputRow: { 
+    flexDirection: "row", alignItems: "center", 
+    borderTopWidth: 1, borderColor: "#ddd", 
+    paddingVertical: 15,
+  paddingHorizontal:10
   },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical:10,
-    marginHorizontal: 5,
-  },
+  input: { flex: 1, borderWidth: 1, borderColor: "#ccc", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 10, marginHorizontal: 5 },
+  modalBackground: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  modalContainer: { backgroundColor: "#fff", padding: 25, borderRadius: 15, width: "80%", alignItems: "center" },
+  modalTitle: { fontSize: 18, fontWeight: "600", textAlign: "center", marginBottom: 20 },
+  modalButtons: { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+  acceptButton: { backgroundColor: "green", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, flex: 1, marginRight: 10 },
+  declineButton: { backgroundColor: "red", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, flex: 1 },
+  modalButtonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
+  leaveButton: { position: "absolute", top: Platform.OS === "ios" ? 50 : 40, right: 20, backgroundColor: "red", paddingVertical: 10, paddingHorizontal: 15, borderRadius: 10, zIndex: 35 },
+  leaveButtonText: { color: "white", fontWeight: "bold", fontSize: 16 },
+  touchBlocker: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "transparent", zIndex: 10 },
+  roomClosedModal: { backgroundColor: "#fff", padding: 20, borderRadius: 15, minWidth: 250, alignItems: "center" },
 });

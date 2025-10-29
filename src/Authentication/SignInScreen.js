@@ -1,51 +1,44 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Image 
-} from 'react-native';
-import axios from 'axios';
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigation } from '@react-navigation/native';
-     // ❌ Not supported in RN
-// Instead, use react-native-vector-icons
-import Icon from 'react-native-vector-icons/FontAwesome';
-import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
+// ✅ src/Authentication/SignIn.js — FINAL UNIFIED VERSION WITH SIGNUP STYLING & PASSWORD FIX
+// Matches SignUp styling 100%: background, shadows, spacing, input rows, and icons.
+// Fixes placeholder + password visibility issues in Play Store builds.
 
-import {  
-  setSignInReelChatUserName,
-  setSignInReelChatPassWord,
-  setSignInReelChatEmail,
-  saveSignInReelChatUserName 
-} from '../Redux/Slice/Authentication/SignIn.js';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  StatusBar,
+  ScrollView,
+  Platform,
+  ImageBackground,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import axios from "axios";
+import { useDispatch } from "react-redux";
+import { useNavigation } from "@react-navigation/native";
+import Icon from "react-native-vector-icons/FontAwesome";
+import MaterialIcon from "react-native-vector-icons/MaterialIcons";
+import { setCredentials } from "../Redux/Slice/Authentication/SignUp.js";
 
-import { setCredentials } from '../Redux/Slice/Authentication/SignUp.js';
+const logoImage = require("../../assets/images/LogoWelCome.png");
+const backgroundImage = require("../../assets/images/FinalBack.png");
 
 export default function SignIn({ setIsSignUp }) {
   const dispatch = useDispatch();
   const navigation = useNavigation();
 
-  const signInReelChatUserName = useSelector(
-    (state) => state.signInReelChat.signInReelChatUserName
-  );
-  const signInReelChatPassWord = useSelector(
-    (state) => state.signInReelChat.signInReelChatPassWord
-  );
-  const signInReelChatEmail = useSelector(
-    (state) => state.signInReelChat.signInReelChatEmail
-  );
-
-  const [username, setUsername] = useState('');
-  const [email, setEmail]     = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleSignIn = async () => {
     try {
-      const response = await axios.post('http://localhost:8000/signIn', {
+      const response = await axios.post("http://192.168.2.16:8000/signIn", {
         username,
         email,
         password,
@@ -54,176 +47,251 @@ export default function SignIn({ setIsSignUp }) {
       if (response.status === 200) {
         const { user, token } = response.data;
         dispatch(setCredentials({ user, token }));
-        navigation.navigate('Home'); // Navigate to Home screen
+        navigation.replace("Sampleeee"); // Navigate to main screen
+      } else {
+        setErrorMessage("Sign in failed. Please try again.");
       }
     } catch (error) {
       if (error.response) {
-        setErrorMessage(error.response.data.message || 'Login failed.');
+        setErrorMessage(error.response.data.message || "Login failed.");
       } else {
-        setErrorMessage('An error occurred. Please try again.');
+        setErrorMessage("An error occurred. Please try again.");
       }
+      console.error("SignIn error:", error);
     }
   };
 
-  const googleAuth = () => {
-    // On mobile, you’d integrate Google Sign-In SDK (expo-auth-session or react-native-google-signin)
-    console.log('Google Auth not implemented in React Native');
-  };
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.headerTitle}>Sign In</Text>
+    <ImageBackground
+      source={backgroundImage}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.centerBlock}>
+            {/* Sign-in Card */}
+            <View style={styles.container}>
+              <View style={styles.headerRow}>
+                <Image source={logoImage} style={styles.logo} resizeMode="contain" />
+                <Text style={styles.welcomeMsg}>Welcome to ReelChat...!!!</Text>
+              </View>
 
-      {/* Username */}
-      <View style={styles.inputRow}>
-        <Icon name="user" size={24} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          placeholder="Username"
-          value={username}
-          onChangeText={setUsername}
-        />
-      </View>
+              <Text style={styles.headerTitle}>Sign In</Text>
 
-      {/* Email */}
-      <View style={styles.inputRow}>
-        <MaterialIcon name="email" size={24} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-        />
-      </View>
+              {/* Username */}
+              <View style={styles.inputRow}>
+                <Icon name="user" size={20} color="#444" style={styles.icon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username"
+                  placeholderTextColor="#888"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                />
+              </View>
 
-      {/* Password */}
-      <View style={styles.inputRow}>
-        <Icon name="lock" size={24} color="#555" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-      </View>
+              {/* Email */}
+              <View style={styles.inputRow}>
+                <MaterialIcon name="email" size={20} color="#444" style={styles.icon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor="#888"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
 
-      {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+              {/* Password */}
+              <View style={styles.inputRow}>
+                <Icon name="lock" size={20} color="#444" style={styles.icon} />
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  placeholder="Password"
+                  placeholderTextColor="#888"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <MaterialIcon
+                    name={showPassword ? "visibility" : "visibility-off"}
+                    size={20}
+                    color="#444"
+                  />
+                </TouchableOpacity>
+              </View>
 
-      {/* Sign In Button */}
-      <TouchableOpacity style={styles.signInButton} onPress={handleSignIn}>
-        <Text style={styles.signInButtonText}>Sign In</Text>
-      </TouchableOpacity>
+              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-      {/* Google Sign-In (placeholder) */}
-      {/* 
-      <TouchableOpacity style={styles.googleButton} onPress={googleAuth}>
-        <Image
-          source={{ uri: "https://pixy.org/src/476/4766956.png" }}
-          style={styles.googleIcon}
-        />
-        <Text style={styles.googleText}>Sign in with Google</Text>
-      </TouchableOpacity>
-      */}
+              <TouchableOpacity style={styles.button} onPress={handleSignIn}>
+                <Text style={styles.buttonText}>Sign In</Text>
+              </TouchableOpacity>
 
-      {/* Terms */}
-      <Text style={styles.terms}>
-        By signing in, you agree to the Terms of Service and Privacy Policy,
-        including Cookie Use.
-      </Text>
+              {/* Policy links */}
+              <Text style={styles.termsText}>
+                By signing in, you agree to our{" "}
+                <Text
+                  style={styles.linkText}
+                  onPress={() => navigation.navigate("TermsOfService")}
+                >
+                  Terms of Service
+                </Text>
+                ,{" "}
+                <Text
+                  style={styles.linkText}
+                  onPress={() => navigation.navigate("CookiesPolicy")}
+                >
+                  Cookies Policy
+                </Text>{" "}
+                and{" "}
+                <Text
+                  style={styles.linkText}
+                  onPress={() => navigation.navigate("PrivacyPolicy")}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
 
-      {/* Switch to Sign Up */}
-      <View style={styles.signUpRow}>
-        <Text style={styles.signUpText}>Don't have an account?</Text>
-        <TouchableOpacity onPress={() => setIsSignUp(true)}>
-          <Text style={styles.signUpButton}>Sign Up</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+              <View style={styles.signInRow}>
+                <Text style={styles.signInText}>Don't have an account?</Text>
+                <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
+                  <Text style={styles.signInButton}> Sign Up</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  background: {
     flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
+  },
+  centerBlock: {
+    width: "100%",
+    alignItems: "center",
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  logo: {
+    borderRadius: 10,
+    width: 60,
+    height: 60,
+    marginRight: 12,
+  },
+  welcomeMsg: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "black",
+    textAlign: "center",
+  },
+  container: {
+    width: "100%",
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 15,
+    boxShadow: "0px 2px 6px rgba(0,0,0,0.15)",
+    elevation: 5,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 30,
-    textAlign: 'center',
+    textAlign: "center",
+    color: "#333",
   },
   inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
+    flexDirection: "row",
+    alignItems: "center",
     borderBottomWidth: 1,
-    borderColor: '#ccc',
+    borderBottomColor: "#ccc",
+    marginBottom: 20,
+    paddingBottom: 5,
+    backgroundColor: "#fff",
+    boxShadow: "0px 1px 1.41px rgba(0,0,0,0.2)",
+    elevation: 2,
+    borderRadius: 5,
+    paddingHorizontal: 10,
   },
   icon: {
-    marginRight: 10,
+    width: 30,
+    textAlign: "center",
   },
   input: {
     flex: 1,
-    paddingVertical: 8,
     fontSize: 16,
+    paddingVertical: 5,
+    textAlignVertical: "center",
+    fontFamily: Platform.OS === "android" ? "sans-serif" : undefined,
   },
-  error: {
-    color: 'red',
-    marginBottom: 10,
-    textAlign: 'center',
+  errorText: {
+    color: "red",
+    marginBottom: 15,
+    textAlign: "center",
   },
-  signInButton: {
-    backgroundColor: '#007bff',
+  button: {
+    backgroundColor: "#007bff",
     paddingVertical: 12,
     borderRadius: 8,
-    marginTop: 10,
+    alignItems: "center",
+    marginBottom: 20,
+    boxShadow: "0px 2px 3.84px rgba(0,0,0,0.25)",
+    elevation: 5,
   },
-  signInButtonText: {
-    color: '#fff',
-    textAlign: 'center',
+  buttonText: {
+    color: "#fff",
     fontSize: 18,
+    fontWeight: "bold",
   },
-  terms: {
+  termsText: {
     fontSize: 12,
-    color: '#666',
-    marginTop: 20,
-    textAlign: 'center',
+    color: "#555",
+    textAlign: "center",
+    marginBottom: 20,
   },
-  signUpRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 15,
+  linkText: {
+    color: "#007bff",
+    textDecorationLine: "underline",
   },
-  signUpText: {
+  signInRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  signInText: {
     fontSize: 14,
-    marginRight: 5,
+    color: "#555",
   },
-  signUpButton: {
+  signInButton: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#007bff',
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eee',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 15,
-    justifyContent: 'center',
-  },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 10,
-  },
-  googleText: {
-    fontSize: 16,
-    color: '#333',
+    color: "#007bff",
+    fontWeight: "bold",
   },
 });

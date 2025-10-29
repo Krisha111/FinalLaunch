@@ -1,55 +1,83 @@
-// src/screens/Profile.js
-import React, { useState, useEffect } from "react";
+// ✅ src/screens/Profile.js — FULLY MERGED & FIXED VERSION
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  ScrollView,
   ActivityIndicator,
+  Platform,
+  FlatList,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 
 import ProfileSidebar from "../compo/Profile/ProfileSidebar.js";
-import { fetchProfileById } from "../Redux/Slice/Profile/ProfileInformationSlice.js";
+import {
+  fetchProfileById,
+  clearProfile,
+} from "../Redux/Slice/Profile/ProfileInformationSlice.js";
 
-export default function Profile({ route }) {
+export default function Profile() {
+  // ------------------ Hooks ------------------
   const navigation = useNavigation();
+  const route = useRoute(); // ✅ ensures route is always defined
   const dispatch = useDispatch();
+  const contentRef = useRef(null);
 
+  // ------------------ Redux Data ------------------
   const loggedInUserId = useSelector((state) => state.signUpAuth.user?._id);
-  const profileUserId = route.params?.userId || loggedInUserId;
+
+  // ✅ Safely extract userId from route.params
+  const profileUserId = route?.params?.userId ?? loggedInUserId ?? null;
 
   const { profile, loading, error } = useSelector(
     (state) => state.profileInformation
   );
 
+  // ------------------ Local State ------------------
   const [images, setImages] = useState([]);
 
+  // ------------------ Constants ------------------
   const UNSPLASH_URL = "https://api.unsplash.com/search/photos";
   const ACCESS_KEY = "0b_PBFtOzp79VOLz--Da8Qis4_l8mv1gtw4-Ne-W2Rs";
 
-  // ------------------ Convert profile image URL ------------------
-  const getFullImageUrl = (uri) => {
-    if (!uri) return null;
-    // Absolute URL
-    if (uri.startsWith("http") || uri.startsWith("https")) return uri;
-    // Backend relative path
-    return `http://192.168.2.16:8000${uri}`;
-  };
+  // ------------------ Helpers ------------------
+  // const getFullImageUrl = (uri) => {
+  //   if (!uri) return null;
+  //   if (uri.startsWith("http") || uri.startsWith("https")) return uri;
+  //   return `https://finallaunchbackend.onrender.com${uri}`;
+  // };
+const getFullImageUrl = (uri) => {
+  if (!uri) return null;
+  // ✅ Force HTTPS for Render
+  return uri.replace(/^http:/, 'https:');
+};
 
-  // ------------------ Fetch profile ------------------
+  // ------------------ Effects ------------------
+  // ✅ FIX 1: Clear profile and refetch whenever profileUserId changes
   useEffect(() => {
     if (profileUserId) {
+      console.log("🔄 Profile userId changed to:", profileUserId);
+      dispatch(clearProfile()); // Clear old profile data first
       dispatch(fetchProfileById(profileUserId));
     }
   }, [profileUserId, dispatch]);
 
-  // ------------------ Fetch demo images from Unsplash ------------------
+  // ✅ FIX 2: Also refetch when screen comes into focus (handles navigation back)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (profileUserId) {
+
+        dispatch(clearProfile());
+        dispatch(fetchProfileById(profileUserId));
+      }
+    }, [profileUserId, dispatch])
+  );
+
   useEffect(() => {
     const getImages = async () => {
       try {
@@ -64,166 +92,289 @@ export default function Profile({ route }) {
     getImages();
   }, []);
 
-  // ------------------ Navigate to Edit Profile ------------------
+  // ------------------ Navigation ------------------
   const navigateToEdit = () => {
     navigation.navigate("EditProfile");
   };
 
-  return (
-    <ScrollView style={styles.profileContainer}>
-      <View style={styles.profileTopContainer}>
-        <View style={styles.profileTopLeftContainer}>
-          {profileUserId === loggedInUserId && (
-            <View style={styles.profileEditBoxxy}>
-              <TouchableOpacity
-                onPress={navigateToEdit}
-                style={styles.profileEditClick}
-              >
-                <Text style={styles.editText}>Edit</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+  // ------------------ Render Logic ------------------
+  const listData = [{ key: "sidebar" }];
 
-          {/* Profile info */}
-          <View style={styles.profileNameContainerMePage}>
-            <View style={styles.profilePhotoBoxContainer}>
-              <View style={styles.profilePhotoBoxInnerContainer}>
-                {profile?.profileImage ? (
-                  <Image
-                    source={{ uri: profile?.profileImage }}
-                    style={styles.profilePhoto}
-                  />
+  const renderHeader = () => (
+    <>
+      {/* Header */}
+      <View style={styles.headerContainer}>
+       
+        <Text style={styles.headerTitle}>Profile</Text>
+      </View>
+
+      {/* Profile Card */}
+      <View style={styles.profileCard}>
+        {profileUserId === loggedInUserId && (
+          <TouchableOpacity onPress={navigateToEdit} style={styles.editButton}>
+            <MaterialCommunityIcons name="pencil" size={18} color="#fff" />
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Profile Image */}
+        <View style={styles.profileImageSection}>
 
 
-                ) : (
+          <View style={styles.profileImageWrapper}>
+            <View style={styles.profileImageContainer}>
+              {console.log(profile?.profileImage,"profile?.profileImage")}
+              {profile?.profileImage ? (
+                <Image
+                  source={{ uri: getFullImageUrl(profile?.profileImage) }}
+                  style={styles.profileImage}
+                />
+              ) : (
+                <View style={styles.profileImagePlaceholder}>
                   <MaterialCommunityIcons
                     name="account-circle"
-                    size={80}
-                    color="#555"
+                    size={100}
+                    color="#e0e0e0"
                   />
-                )}
-              </View>
-            </View>
-
-            <View style={styles.mePageInfoContainerOfBio}>
-              <View style={styles.profilefollowersAndMePageFollowings}>
-                <Text style={styles.profileUserNameMePagey}>
-                  {profile?.username || "username_placeholder"}
-                </Text>
-              </View>
-
-              <View style={styles.profileInformationMePageContaniner}>
-                {loading ? (
-                  <ActivityIndicator size="small" color="gray" />
-                ) : error ? (
-                  <Text style={{ color: "red" }}>
-                    {typeof error === "string"
-                      ? error
-                      : error?.message || "Something went wrong"}
-                  </Text>
-                ) : (
-                  <>
-                    <Text style={styles.profileNameMePage}>
-                      {profile?.name || "Name"}
-                    </Text>
-                    <Text style={styles.profileBioMePage}>
-                      {profile?.bio || "Bio"}
-                    </Text>
-                  </>
-                )}
-              </View>
+                </View>
+              )}
             </View>
           </View>
         </View>
-      </View>
 
-      {/* Sidebar */}
-      <ProfileSidebar profileUserId={profileUserId} />
-    </ScrollView>
+        {/* Profile Info */}
+        <View style={styles.profileInfoSection}>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#63e25e" />
+              <Text style={styles.loadingText}>Loading profile...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <MaterialCommunityIcons
+                name="alert-circle"
+                size={40}
+                color="#ff6b6b"
+              />
+              <Text style={styles.errorText}>
+                {typeof error === "string"
+                  ? error
+                  : error?.message || "Something went wrong"}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.username}>
+                @{profile?.username || "username_placeholder"}
+              </Text>
+              <Text style={styles.fullName}>{profile?.name || "Name"}</Text>
+
+              {profile?.bio && (
+                <View style={styles.bioContainer}>
+                  <Text style={styles.bioText}>{profile?.bio}</Text>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      </View>
+    </>
+  );
+
+  return (
+    <FlatList
+      ref={contentRef}
+      data={listData}
+      keyExtractor={(item) => item.key}
+      ListHeaderComponent={renderHeader}
+      renderItem={() => (
+        <View style={styles.sidebarContainer}>
+          <ProfileSidebar profileUserId={profileUserId} />
+        </View>
+      )}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.profileContainer}
+    />
   );
 }
 
+// ------------------ Styles ------------------
 const styles = StyleSheet.create({
   profileContainer: {
-    flex: 1,
-    flexDirection: "column",
+    flexGrow: 1,
+    backgroundColor: "#f5f5f5",
+    paddingBottom: 30,
+  },
+  headerContainer: {
     backgroundColor: "#fff",
-  },
-  profileTopContainer: {
-   display:"flex",
-    flexDirection: "row",
- 
-  },
-  profileTopLeftContainer: {
-    flex: 1,
-    flexDirection: "column",
-  },
-  profileEditBoxxy: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    paddingTop: 15,
-    width: "100%",
-  },
-  profileEditClick: {
-    paddingVertical: 10,
+    paddingTop: 20,
+    paddingBottom: 15,
     paddingHorizontal: 20,
-    backgroundColor: "#63e25e",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      default: {
+        boxShadow: "0px 2px 3px rgba(0,0,0,0.05)",
+      },
+    }),
+    elevation: 3,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    textAlign: "center",
+  },
+  profileCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 15,
+    marginTop: 20,
     borderRadius: 20,
-    marginRight: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      default: {
+        boxShadow: "0px 4px 8px rgba(0,0,0,0.08)",
+      },
+    }),
+    elevation: 5,
   },
-  editText: {
-    color: "white",
-    fontWeight: "600",
-  },
-  profileNameContainerMePage: {
+  editButton: {
+    position: "absolute",
+    top: 20,
+    right: 20,
     flexDirection: "row",
-    padding: 20,
-  },
-  profilePhotoBoxContainer: {
-   
-    flex: 0.3,
-    justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#63e25e",
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 25,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#63e25e",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      default: {
+        boxShadow: "0px 2px 4px rgba(99,226,94,0.25)",
+      },
+    }),
+    elevation: 3,
+    zIndex: 10,
   },
-  profilePhotoBoxInnerContainer: {
-    width: 300,
-    height: 300,
-    borderRadius: 500,
+  editButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+    marginLeft: 6,
+  },
+  profileImageSection: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  profileImageWrapper: {
+    position: "relative",
+  },
+  profileImageContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "white",
+    borderWidth: 4,
+    borderColor: "white",
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f0f0f0",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#63e25e",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+      },
+      default: {
+        boxShadow: "0px 4px 8px rgba(99,226,94,0.12)",
+      },
+    }),
+    elevation: 5,
   },
-  profilePhoto: {
+  profileImage: {
     width: "100%",
     height: "100%",
     resizeMode: "cover",
-    borderRadius: 75,
   },
-  mePageInfoContainerOfBio: {
-    flex: 0.7,
-    paddingLeft: 20,
-    flexDirection: "column",
-  },
-  profilefollowersAndMePageFollowings: {
-    flexDirection: "row",
+  profileImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 5,
+    backgroundColor: "#fafafa",
   },
-  profileUserNameMePagey: {
-    fontSize: 20,
-    fontWeight: "500",
+  profileInfoSection: {
+    alignItems: "center",
   },
-  profileInformationMePageContaniner: {
-    flexDirection: "column",
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: "center",
   },
-  profileNameMePage: {
+  loadingText: {
+    marginTop: 15,
+    fontSize: 14,
+    color: "#666",
+  },
+  errorContainer: {
+    paddingVertical: 40,
+    alignItems: "center",
+  },
+  errorText: {
+    marginTop: 15,
+    fontSize: 14,
+    color: "#ff6b6b",
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  username: {
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 5,
+    color: "black",
+    marginBottom: 8,
+    letterSpacing: 0.5,
   },
-  profileBioMePage: {
+  fullName: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    marginBottom: 15,
+  },
+  bioContainer: {
+    backgroundColor: "#f9f9f9",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 20,
+    width: "100%",
+  },
+  bioText: {
     fontSize: 14,
     color: "#555",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  sidebarContainer: {
+    marginTop: 20,
+    paddingBottom: 30,
   },
 });

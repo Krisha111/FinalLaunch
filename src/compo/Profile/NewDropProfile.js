@@ -15,7 +15,7 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome';
 
 // Keep relative imports to your RN components (assumes RN versions exist)
 import Reel from './NewDropOptions/Reel'; // you should have RN version
-import AddSlidesPhoto from './NewDropPopUp/AddSlidesPhoto';
+
 import { useSelector } from 'react-redux';
 
 import ReelNewDrop from '../ReelChat/NewPhotoPosting/ReelNewDrop';
@@ -42,8 +42,7 @@ export default function NewDropProfile({ onClose }) {
   const [activeTab, setActiveTab] = useState('POST');
   const [scrollX, setScrollX] = useState(0);
 
-  // optional redux usage kept (your original used useSelector even if not used directly)
-  const reduxData = useSelector((state) => state); // keep in case you need it
+ 
 
   // scroll helper - scroll by half screen width
   const scroll = (direction) => {

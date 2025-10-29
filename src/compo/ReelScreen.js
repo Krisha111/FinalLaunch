@@ -1,175 +1,259 @@
-// ReelPlayer.js (React Native)
 
-import React, { useState, useEffect } from "react";
+// ReelPlayer.js (React Native) — COMPLETE FIXED VERSION
+// Full screen reels above tab bar, proper container height/width, safety checks
+// ✅ NOW RECEIVES AND PASSES onNavigateToProfile prop
+// ✅ FIX: First reel auto-play on initial load without blink
+
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Image,
-  TouchableOpacity,
+  FlatList,
   Dimensions,
-  Animated,
+  ActivityIndicator,
+  StatusBar,
 } from "react-native";
+
+
+
+
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllReels } from "../Redux/Slice/Profile/reelNewDrop.js";
-
-import ReelSide from "./ReelSide";
 import ReelTalk from "./ReelTalk";
-import ReelInformation from "../compo/ReelChat/ReelInformation.js";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-// Arrow icon
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+
+// ✅ Add these imports at the top
+import { TouchableOpacity } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 
 const { height, width } = Dimensions.get("window");
 
-export default function ReelPlayer() {
+export default function ReelPlayer({ onNavigateToProfile, onBackPress  , setHideBottomNav}) {
   const dispatch = useDispatch();
+   const navigation = useNavigation(); // 👈 add this
+  const insets = useSafeAreaInsets();
+  const flatListRef = useRef(null);
 
-  const [reelBarOpen, setReelBarOpen] = useState(true);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(-1); // Start with -1 to fix first reel issue
+useEffect(() => {
+  if (typeof setHideBottomNav === "function") {
+    console.log("🟡 Hiding bottom nav from ReelPlayer");
+    setHideBottomNav(true); // hide when ReelPlayer mounts
+  }
 
+  return () => {
+    if (typeof setHideBottomNav === "function") {
+      console.log("🟢 Restoring bottom nav from ReelPlayer unmount");
+      setHideBottomNav(true); // restore on unmount
+    }
+  };
+}, []);
+
+
+  // ✅ Force first reel active after mount
   useEffect(() => {
-    dispatch(fetchAllReels());
- 
-  }, [dispatch]);
+    const timer = setTimeout(() => {
+      setCurrentIndex(0); // Activate first reel
+    }, 50); // Small delay to allow FlatList to measure
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Fetch reels on mount
+ const handleBackPress = () => {
+  console.log("🔙 Back button pressed in ReelPlayer");
+  console.log("🔙 onBackPress function exists:", typeof onBackPress === "function");
+  
+  if (typeof onBackPress === "function") {
+    console.log("🔙 Calling onBackPress");
+    onBackPress();
+  } else {
+    console.log("❌ onBackPress is not a function");
+  }
+};
 
   const reels = useSelector((state) => state.reelNewDrop.mainPageReels || []);
+  const loading = useSelector((state) => state.reelNewDrop.loading);
 
-  if (reels.length === 0) {
+  // Exact height for each reel item: screen minus tab bar
+ 
+  const ITEM_HEIGHT = height;
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (viewableItems.length > 0) {
+      const newIndex = viewableItems[0].index || 0;
+      if (newIndex !== currentIndex) {
+        setCurrentIndex(newIndex);
+      }
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+  }).current;
+
+  if (loading) {
     return (
-      <View style={styles.reelPlayerContainer}>
-        <Text>No reels available.</Text>
+      <View style={[styles.reelPlayerContainer, styles.centerContent]}>
+      {/* ✅ BACK BUTTON even when no reels */}
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={0.8}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleBackPress();
+          }}
+        >
+          <MaterialCommunityIcons
+            name="arrow-left"
+            size={28}
+            color="white"
+            style={styles.backIcon}
+          />
+        </TouchableOpacity>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={styles.loadingText}>Loading reels...</Text>
       </View>
     );
   }
 
-  const toggleReelBar = () => {
-    setReelBarOpen(!reelBarOpen);
-  };
-
-  const onScroll = (event) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const newIndex = Math.round(offsetY / height);
-    if (newIndex !== currentIndex) {
-      setCurrentIndex(newIndex);
-    }
-  };
+  if (!reels || reels.length === 0) {
+    return (
+      <View style={[styles.reelPlayerContainer, styles.centerContent]}>
+      {/* ✅ BACK BUTTON even when no reels */}
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={0.8}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleBackPress();
+          }}
+        >
+          <MaterialCommunityIcons
+            name="arrow-left"
+            size={28}
+            color="white"
+            style={styles.backIcon}
+          />
+        </TouchableOpacity>
+        <Text style={styles.noReelsText}>No reels available.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.reelPlayerContainer}>
-      {   console.log("reelsreelsreels",reels)}
-      {/* Reels Wrapper */}
-      <ScrollView
-        pagingEnabled
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        style={styles.reelsWrapper}
-      >
-        {reels.map((reel, index) => (
-          <View key={reel._id || index} 
-          style={styles.singleReel}>
-            <ReelTalk reel={reel} isActive={index === currentIndex}/>
-          </View>
-        ))}
-      </ScrollView>
+      <StatusBar barStyle="light-content" />
+    <TouchableOpacity
+  style={styles.backButton}
+  activeOpacity={0.8}
+  onPress={(e) => {
+    e.stopPropagation(); // Prevent event from reaching video
+    handleBackPress();
+  }}
+>
+  <MaterialCommunityIcons
+    name="arrow-left"
+    size={28}
+    color="white"
+    style={styles.backIcon}
+  />
+</TouchableOpacity>
 
-    
+      <FlatList
+        ref={flatListRef}
+        data={reels}
+        keyExtractor={(item, index) => item?._id || index.toString()}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        snapToInterval={ITEM_HEIGHT}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        getItemLayout={(data, index) => ({
+          length: ITEM_HEIGHT,
+          offset: ITEM_HEIGHT * index,
+          index,
+        })}
+        renderItem={({ item, index }) => {
+          if (!item) {
+            return (
+              <View style={[styles.singleReel, { height: ITEM_HEIGHT }]}>
+                <Text style={styles.errorText}>Reel data unavailable</Text>
+              </View>
+            );
+          }
+
+          return (
+            <View style={[styles.singleReel, { height: ITEM_HEIGHT }]}>
+              {/* Pass onNavigateToProfile to ReelTalk */}
+              <ReelTalk
+                reel={item}
+                isActive={index === currentIndex}
+                onNavigateToProfile={onNavigateToProfile}
+              />
+            </View>
+          );
+        }}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={2}
+        windowSize={3}
+        initialNumToRender={1}
+        contentContainerStyle={styles.flatListContent}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // Containers
   reelPlayerContainer: {
     flex: 1,
-    flexDirection: "row",
-    backgroundColor: "#fff",
   },
-  reelsWrapper: {
-    flex: 0.65,
-    height: "100%",
+ backButton: {
+  position: "absolute",
+  top: 10,
+  left: 20,
+  zIndex: 10000, // ← Increased from 1000
+  backgroundColor: "rgba(0, 0, 0, 0.6)", // ← More visible
+  borderRadius: 30,
+  padding: 12, // ← Increased touch area
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.8,
+  shadowRadius: 3,
+  elevation: 10, // ← Increased for Android
+},
+backIcon: {
+  textShadowColor: "rgba(0,0,0,0.8)",
+  textShadowOffset: { width: 1, height: 1 },
+  textShadowRadius: 3,
+},
+
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  flatListContent: {
+    flexGrow: 1,
   },
   singleReel: {
-    height: height-60,
-    justifyContent: "center",
-    alignItems: "center",
+    width: width,
   },
-  openReelBarContainer: {
-    flex: 1,
-    height: "100%",
-    flexDirection: "column",
-  },
-
-  // Sidebar
-  reelSideBar: {
-    flex: 0.35,
-    height: "100%",
-    borderLeftWidth: 1,
-    borderLeftColor: "lightgray",
-    flexDirection: "column",
-    transition: "flex 0.5s ease", // RN doesn’t support, but kept as placeholder
-  },
-  reelSideBarClosed: {
-    flex: 0.1,
-  },
-  reelBarToggleIcon: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-  },
-  reelBarIcons: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  arrowIconReelProfile: {
-    alignSelf: "center",
-  },
-  theProfilePhotoReelChat: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  userAvatar: {
-    borderRadius: 10,
-    width: 40,
-    height: 40,
-    marginLeft: 5,
-    marginRight: 10,
-  },
-
-  // User + ticker
-  idContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    overflow: "hidden",
-  },
-  username: {
+  noReelsText: {
+    color: "#fff",
     fontSize: 16,
-    fontWeight: "600",
+    textAlign: "center",
   },
-  tickerContainer: {
-    marginTop: 3,
-    maxWidth: width * 0.15,
-    backgroundColor: "white",
-    color: "black",
-    borderRadius: 20,
-    height: 20,
-    justifyContent: "center",
-    paddingHorizontal: 6,
-    marginLeft: 5,
-    overflow: "hidden",
+  loadingText: {
+    color: "#fff",
+    fontSize: 14,
+    marginTop: 10,
+    textAlign: "center",
   },
-  tickerText: {
-    fontSize: 10,
-    color: "black",
-  },
-
-  reelInfoContainer: {
-    flex: 0.9,
-    width: "100%",
-    height: "100%",
-    overflow: "hidden",
+  errorText: {
+    color: "#fff",
+    fontSize: 14,
+    textAlign: "center",
   },
 });

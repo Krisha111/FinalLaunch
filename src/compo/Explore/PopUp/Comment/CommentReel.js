@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
-import { Audio } from 'expo-av';
+import { Audio } from 'expo-audio';
 import { commentOnReel } from '../../../../Redux/Slice/Profile/reelNewDrop.js';
 import PostComment from '../PostComment.js';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons'; // <-- Material Icons
@@ -157,13 +157,13 @@ export default function CommentReel({ post, reelId, contentType }) {
       {/* Input Box */}
       <View style={styles.inputBox}>
         {/* Mic */}
-        <TouchableOpacity onPress={toggleRecording} style={styles.iconBtn}>
+        {/* <TouchableOpacity onPress={toggleRecording} style={styles.iconBtn}>
           <MaterialIcons
             name="keyboard-voice"
             size={28}
             color={isRecording ? 'red' : 'black'}
           />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {/* Image Preview or Text Input */}
         <View style={styles.inputWrapper}>

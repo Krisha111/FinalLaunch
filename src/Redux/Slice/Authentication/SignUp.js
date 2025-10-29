@@ -1,54 +1,119 @@
 // src/Redux/Slices/Authentication/signUpAuthSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearReelState, fetchAllReels } from '../Profile/reelNewDrop.js'; // ✅ make sure path matches your setup
 
-const API_BASE = "http://192.168.2.16:8000"; 
+// ==========================================
+// ✅ Cross-Platform Storage Wrapper
+// ==========================================
+const isWeb = Platform.OS === 'web';
 
-// 🔹 SIGNUP
+const Storage = {
+  setItem: async (key, value) => {
+    try {
+      if (isWeb) {
+        localStorage.setItem(key, value);
+      } else {
+        await AsyncStorage.setItem(key, value);
+      }
+    } catch (err) {
+      console.error("Error saving to storage:", err);
+    }
+  },
+  getItem: async (key) => {
+    try {
+      if (isWeb) {
+        return localStorage.getItem(key);
+      } else {
+        return await AsyncStorage.getItem(key);
+      }
+    } catch (err) {
+      console.error("Error reading from storage:", err);
+      return null;
+    }
+  },
+  removeItem: async (key) => {
+    try {
+      if (isWeb) {
+        localStorage.removeItem(key);
+      } else {
+        await AsyncStorage.removeItem(key);
+      }
+    } catch (err) {
+      console.error("Error removing from storage:", err);
+    }
+  },
+};
+
+// ==========================================
+// ✅ API BASE URL CONFIGURATION
+// ==========================================
+const API_BASE = "https://finallaunchbackend.onrender.com"; // Change to your LAN IP / emulator / production
+
+// ==========================================
+// ✅ SIGNUP
+// ==========================================
 export const signUpUser = createAsyncThunk(
   'auth/signUpUser',
-  async (userData, { rejectWithValue }) => {
+  async (userData, { rejectWithValue, dispatch }) => {
     try {
       const response = await axios.post(`${API_BASE}/auth/signUp`, userData);
       const { token, user } = response.data;
 
       if (token) {
-        await AsyncStorage.setItem('token', token);
-        await AsyncStorage.setItem('user', JSON.stringify(user));
+        await Storage.setItem('token', token);
+        await Storage.setItem('user', JSON.stringify(user));
       }
+
+      // ✅ Clear any previous reels and load fresh feed
+      dispatch(clearReelState());
+      dispatch(fetchAllReels());
+
       return { user, token };
     } catch (err) {
+      console.error('signUpUser error:', err.response?.data || err.message || err);
       return rejectWithValue(err.response?.data || { message: "Signup failed" });
     }
   }
 );
 
-// 🔹 SIGNIN
+// ==========================================
+// ✅ SIGNIN
+// ==========================================
 export const signInUser = createAsyncThunk(
   'auth/signInUser',
-  async ({ username, email, password }, { rejectWithValue }) => {
+  async ({ username, email, password }, { rejectWithValue, dispatch }) => {
     try {
       const { data } = await axios.post(`${API_BASE}/auth/signIn`, { username, email, password });
       const { user, token } = data;
 
       if (token) {
-        await AsyncStorage.setItem("token", token);
-        await AsyncStorage.setItem("user", JSON.stringify(user));
+        await Storage.setItem('token', token);
+        await Storage.setItem('user', JSON.stringify(user));
       }
+
+      // ✅ Clear and reload reels feed
+      dispatch(clearReelState());
+      dispatch(fetchAllReels());
+
       return { user, token };
     } catch (err) {
+      console.error('signInUser error:', err.response?.data || err.message || err);
       return rejectWithValue(err.response?.data || { message: "Sign in failed" });
     }
   }
 );
 
-// 🔹 FETCH ME
+// ==========================================
+// ✅ FETCH ME
+// ==========================================
 export const fetchMe = createAsyncThunk(
   "auth/fetchMe",
   async (_, { rejectWithValue }) => {
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await Storage.getItem("token");
       if (!token) return rejectWithValue({ message: "No token found" });
 
       const { data } = await axios.get(`${API_BASE}/auth/me`, {
@@ -56,12 +121,15 @@ export const fetchMe = createAsyncThunk(
       });
       return data.user;
     } catch (err) {
+      console.error('fetchMe error:', err.response?.data || err.message || err);
       return rejectWithValue(err.response?.data || { message: "Fetch me failed" });
     }
   }
 );
 
-// 🔹 FETCH USER BY ID (your snippet added here)
+// ==========================================
+// ✅ FETCH USER BY ID
+// ==========================================
 export const fetchUserById = createAsyncThunk(
   "auth/fetchUserById",
   async (userId, { rejectWithValue }) => {
@@ -69,31 +137,63 @@ export const fetchUserById = createAsyncThunk(
       const res = await axios.get(`${API_BASE}/api/profileInformation/byId/${userId}`);
       return res.data;
     } catch (err) {
+      console.error('fetchUserById error:', err.response?.data || err.message || err);
       return rejectWithValue(err.response?.data || { message: "Fetch user by id failed" });
     }
   }
 );
 
-// 🔹 UPDATE PROFILE IMAGE
+// ==========================================
+// ✅ UPDATE PROFILE IMAGE
+// ==========================================
 export const updateProfileImage = createAsyncThunk(
   'auth/updateProfileImage',
   async (profileImage, { rejectWithValue }) => {
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await Storage.getItem("token");
+      if (!token) return rejectWithValue({ message: "No token found" });
+
       const response = await axios.put(
         `${API_BASE}/auth/profile-image`,
         { profileImage },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      await AsyncStorage.setItem("user", JSON.stringify(response.data.user));
-      return response.data.user;
+
+      const updatedUser = response.data.user || response.data;
+      await Storage.setItem("user", JSON.stringify(updatedUser));
+      return updatedUser;
     } catch (err) {
+      console.error('updateProfileImage error:', err.response?.data || err.message || err);
       return rejectWithValue(err.response?.data || { message: "Failed to update image" });
     }
   }
 );
 
-// 🔹 SLICE
+// ==========================================
+// ✅ LOGOUT
+// ==========================================
+export const logoutUser = createAsyncThunk(
+  'auth/logoutUser',
+  async (_, { dispatch }) => {
+    try {
+      console.log("🧹 Logging out and clearing user data...");
+      await Storage.removeItem('token');
+      await Storage.removeItem('user');
+
+      // ✅ Clear reels when logging out
+      dispatch(clearReelState());
+      dispatch(fetchAllReels());
+    } catch (err) {
+      console.error("Error during logout:", err);
+    }
+
+    dispatch(logout());
+  }
+);
+
+// ==========================================
+// ✅ SLICE
+// ==========================================
 const signUpAuthSlice = createSlice({
   name: 'auth',
   initialState: {
@@ -114,8 +214,8 @@ const signUpAuthSlice = createSlice({
     setCredentials(state, action) {
       state.user = { ...action.payload.user, profileImage: action.payload.user?.profileImage || "" };
       state.token = action.payload.token;
-      AsyncStorage.setItem('token', action.payload.token);
-      AsyncStorage.setItem('user', JSON.stringify(state.user));
+      Storage.setItem('token', action.payload.token);
+      Storage.setItem('user', JSON.stringify(state.user));
     },
 
     logout(state) {
@@ -125,8 +225,8 @@ const signUpAuthSlice = createSlice({
       state.signUpPassWord = '';
       state.signUpEmail = '';
       state.error = null;
-      AsyncStorage.removeItem('token');
-      AsyncStorage.removeItem('user');
+      Storage.removeItem('token');
+      Storage.removeItem('user');
     },
   },
   extraReducers: (builder) => {
@@ -172,11 +272,17 @@ const signUpAuthSlice = createSlice({
       .addCase(fetchUserById.fulfilled, (state, action) => {
         state.user = action.payload;
       })
+      .addCase(fetchUserById.rejected, (state, action) => {
+        state.error = action.payload?.message || state.error;
+      })
 
       // UPDATE PROFILE IMAGE
       .addCase(updateProfileImage.fulfilled, (state, action) => {
-        state.user = { ...state.user, profileImage: action.payload.profileImage || "" };
-        AsyncStorage.setItem("user", JSON.stringify(state.user));
+        state.user = { ...state.user, profileImage: action.payload.profileImage || action.payload?.profileImage || "" };
+        Storage.setItem("user", JSON.stringify(state.user));
+      })
+      .addCase(updateProfileImage.rejected, (state, action) => {
+        state.error = action.payload?.message || state.error;
       });
   }
 });

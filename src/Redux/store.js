@@ -1,10 +1,10 @@
-// store.js
-// Updated store with redux-persist to persist important slices across full app restarts.
-// WARNING: This file includes all reducers you listed and persists selected slices.
-// Don't forget to run: npm install redux-persist @react-native-async-storage/async-storage
+// ==========================================
+// 📁 src/Redux/store.js (Final Fixed Version)
+// ==========================================
 
-import { configureStore, combineReducers } from '@reduxjs/toolkit';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// ✅ Redux Core + Persist Setup
+import { configureStore, combineReducers } from "@reduxjs/toolkit";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   persistStore,
   persistReducer,
@@ -14,95 +14,107 @@ import {
   PERSIST,
   PURGE,
   REGISTER,
-} from 'redux-persist';
+} from "redux-persist";
 
-import { apiSlice } from './apiSlice';
+// ✅ RTK Query Slice
+import { apiSlice } from "./apiSlice";
 
-// --- your reducers (kept exactly as in your original store file) ---
-import authReducer from './Slice/Authentication/SignIn.js';
-import ProfileReducer from './Slice/Profile/ProfileSlice.js'; // Adjust the path
-import BackgroundReducer from './Slice/Profile/BackgroundSlice.js';
-import profileInformationReducer from './Slice/Profile/ProfileInformationSlice.js';
-import socketReducer from './Slice/ReelChat/socketSlice.js';
+// ==========================================
+// ✅ Reducers (All Imports Verified)
+// ==========================================
+import signInReelChatReducer from './Slice/Authentication/SignIn.js'
+import authReducer from "./Slice/Authentication/authSlice.js"; // ✅ main auth (logoutUser, restoreSession, etc.)
+import signUpAuthReducer from "./Slice/Authentication/SignUp.js";
+import ProfileReducer from "./Slice/Profile/ProfileSlice.js";
+import BackgroundReducer from "./Slice/Profile/BackgroundSlice.js";
+import profileInformationReducer from "./Slice/Profile/ProfileInformationSlice.js";
+import socketReducer from "./Slice/ReelChat/socketSlice.js";
+import profileEditReducer from "./Edit.js";
+import newDropSettingReducer from "./Slice/Camera/NewDrop.js";
+import postReducer from "./Slice/MakingNewDrop/Post.js";
+import reelReducer from "./Slice/MakingNewDrop/Reel.js";
+import addDropReducer from "./Slice/MakingNewDrop/AddDrop.js";
+import reelChatPopUpReducer from "./Slice/ReelChat/PopUp/UserNameEntering.js";
+import imagePopUpExploreReducer from "./Slice/Explore/ImagePopUp/ImagePopUpExplore.js";
+import reelNewDropReducer from "./Slice/Profile/reelNewDrop.js";
+import commonIconReducer from "./CommonIcons.js";
+import profilePrivacyReducer from "./Slice/Profile/InsideProfileSettings/ProfilePrivacy.js";
+// import sampleeeeReducer from "./Slice/ReelChat/Sampleeee.js"; // Uncomment if needed
 
-import signUpAuthReducer from './Slice/Authentication/SignUp.js';
-import profileEditReducer from './Edit.js';
-import newDropSettingReducer from './Slice/Camera/NewDrop.js';
-import postReducer from './Slice/MakingNewDrop/Post.js';
-import highLightReducer from './Slice/MakingNewDrop/HighLight.js';
-import momentReducer from './Slice/MakingNewDrop/Moment.js';
-import reelReducer from './Slice/MakingNewDrop/Reel.js';
-import addDropReducer from './Slice/MakingNewDrop/AddDrop.js';
-import thoughtReducer from './Slice/MakingNewDrop/Thought.js';
-import reelChatPopUpReducer from './Slice/ReelChat/PopUp/UserNameEntering.js';
-import signInReelChatReducer from './Slice/Authentication/SignUp.js'; // (kept as in your original file)
-import sampleeeeReducer from './Slice/ReelChat/Sampleeee.js';
-import imagePopUpExploreReducer from './Slice/Explore/ImagePopUp/ImagePopUpExplore.js';
-
-import reelNewDropReducer from './Slice/Profile/reelNewDrop.js';
-
-import commonIconReducer from './CommonIcons.js';
-
-import profilePrivacyReducer from './Slice/Profile/InsideProfileSettings/ProfilePrivacy.js';
-// --------------------------------------------------------------------
-
-// Combine reducers the same way you had originally, but inside combineReducers
+// ==========================================
+// ✅ Combine Reducers
+// ==========================================
 const rootReducer = combineReducers({
-  // RTK Query slice (kept under its reducerPath key)
   [apiSlice.reducerPath]: apiSlice.reducer,
 
-  // your app reducers
-  profilePrivacy: profilePrivacyReducer,
-  profileInformation: profileInformationReducer,
-
-  commonIcon: commonIconReducer,
-
-  reelNewDrop: reelNewDropReducer,
-  imagePopUpExplore: imagePopUpExploreReducer,
-  sampleeee: sampleeeeReducer,
-  addDrop: addDropReducer,
-  highLight: highLightReducer,
-  moment: momentReducer,
-  reel: reelReducer,
-  thought: thoughtReducer,
-  post: postReducer,
-  profileEdit: profileEditReducer,
-  signInReelChat: signInReelChatReducer,
+  // --- Auth ---
+  auth: authReducer,
   signUpAuth: signUpAuthReducer,
 
-  auth: authReducer,
-
-  background: BackgroundReducer,
-  socket: socketReducer,
+  // --- Profile ---
   profile: ProfileReducer,
+  profileEdit: profileEditReducer,
+  background: BackgroundReducer,
+  profileInformation: profileInformationReducer,
+  profilePrivacy: profilePrivacyReducer,
+
+  // --- Media & Reels ---
+  reelNewDrop: reelNewDropReducer,
+  reel: reelReducer,
+  addDrop: addDropReducer,
+  post: postReducer,
   newDropSetting: newDropSettingReducer,
+   signInReelChat:signInReelChatReducer,
+
+  // --- Reel Chat ---
+  socket: socketReducer,
   reelChatPopUp: reelChatPopUpReducer,
+  // sampleeee: sampleeeeReducer, // Optional temporary slice
+
+  // --- UI / Misc ---
+  imagePopUpExplore: imagePopUpExploreReducer,
+  commonIcon: commonIconReducer,
 });
 
-// Persist config - pick slices you want persisted across full app restarts.
-// I recommend persisting auth/signUpAuth (user/token), profileInformation (profile image/name), and reelNewDrop (reels state).
-// Add or remove slice names from `whitelist` as you see fit.
+// ==========================================
+// ✅ Persist Configuration
+// ==========================================
 const persistConfig = {
-  key: 'root',
+  key: "root",
   storage: AsyncStorage,
-  whitelist: ['signUpAuth', 'profileInformation', 'reelNewDrop', 'auth'], // persisted slices
+  whitelist: [
+    "auth", // persist login session (token + user)
+    "signUpAuth", // persist signup info
+    "profileInformation", // profile data
+    "reelNewDrop", // reels cache
+  ],
 };
 
+// ==========================================
+// ✅ Persisted Reducer
+// ==========================================
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
-// Configure store with persisted reducer and add apiSlice middleware
+// ==========================================
+// ✅ Store Configuration
+// ==========================================
 const store = configureStore({
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        // Required to ignore redux-persist actions during serializable checks
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
     }).concat(apiSlice.middleware),
-  // devTools: true // default enabled in development
+  devTools: process.env.NODE_ENV !== "production",
 });
 
-// Create persistor to use with PersistGate in App entry
+// ==========================================
+// ✅ Persistor (for redux-persist)
+// ==========================================
 export const persistor = persistStore(store);
+
+// ==========================================
+// ✅ Export Store
+// ==========================================
 export default store;

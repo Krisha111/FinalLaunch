@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, FlatList, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import CommentsBody from './CommentsBody';
 import { BsEmojiKissFill } from 'react-icons/bs'; // For web, you can replace with react-native-vector-icons
-import { FaMicrophoneAlt } from 'react-icons/fa';
+// import { FaMicrophoneAlt } from 'react-icons/fa';
 import { IoSend } from 'react-icons/io5';
 import { AiFillPicture } from 'react-icons/ai';
 import { Picker } from 'emoji-mart';
@@ -12,9 +12,9 @@ export default function Comments({ onClose }) {
   const [showPopup, setShowPopup] = useState(false);
   const [comments, setComments] = useState([]);
   const [currentComment, setCurrentComment] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [audioBlob, setAudioBlob] = useState(null);
+  // const [isRecording, setIsRecording] = useState(false);
+  // const [mediaRecorder, setMediaRecorder] = useState(null);
+  // const [audioBlob, setAudioBlob] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const handleOpenPopup = () => setShowPopup(true);
@@ -28,16 +28,16 @@ export default function Comments({ onClose }) {
     handleOpenPopup();
   }, []);
 
-  const handleStartRecording = async () => {
-    // Note: Recording logic is platform-dependent in React Native
-    if (!isRecording) {
-      setIsRecording(true);
-      // TODO: Use react-native-audio or expo-av for recording
-    } else {
-      setIsRecording(false);
-      // Stop recording logic
-    }
-  };
+  // const handleStartRecording = async () => {
+  //   // Note: Recording logic is platform-dependent in React Native
+  //   if (!isRecording) {
+  //     setIsRecording(true);
+  //     // TODO: Use react-native-audio or expo-av for recording
+  //   } else {
+  //     setIsRecording(false);
+  //     // Stop recording logic
+  //   }
+  // };
 
   const handleSendComment = () => {
     if (currentComment.trim()) {
@@ -72,9 +72,9 @@ export default function Comments({ onClose }) {
               <TouchableOpacity onPress={() => setShowEmojiPicker(!showEmojiPicker)}>
                 <BsEmojiKissFill size={24} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleStartRecording}>
+              {/* <TouchableOpacity onPress={handleStartRecording}>
                 <FaMicrophoneAlt color={isRecording ? 'red' : 'black'} size={24} />
-              </TouchableOpacity>
+              </TouchableOpacity> */}
               {showEmojiPicker && (
                 <Picker
                   set="apple"

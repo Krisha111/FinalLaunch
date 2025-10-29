@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Dimensions,
   ScrollView,
-  Platform,
   Text,
   StyleSheet as RNStyleSheet,
 } from 'react-native';
@@ -17,40 +16,27 @@ import { useNavigation } from '@react-navigation/native';
 import { showPopupFalse } from '../../../Redux/Slice/Explore/ImagePopUp/ImagePopUpExplore.js';
 import Reel from './Reel.js';
 import { setShareButtonClicked } from '../../../Redux/CommonIcons.js';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
-/**
- * Full-screen ImagePopUp screen
- * - Removes the "box" look (no borderRadius, no shadow).
- * - Content fills the entire screen.
- * - Removes the dim gray inset — uses a full-screen background (black) so media looks correct.
- * - Animates opacity on mount / close.
- * - Attempts to close via navigation.goBack() when available, otherwise just dispatches redux hide actions.
- */
 
 export default function ImagePopUpScreen() {
   const dispatch = useDispatch();
   const navigation = useNavigation();
-
   const selectedPost = useSelector(
     (state) => state.imagePopUpExplore?.selectedPost
   );
 
-  // animate opacity for entrance/exit
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // fade in on mount
     Animated.timing(opacity, {
       toValue: 1,
       duration: 180,
       useNativeDriver: true,
     }).start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // close handler: fade out then dispatch + navigate back (if possible)
   const handleClosePopup = useCallback(() => {
     Animated.timing(opacity, {
       toValue: 0,
@@ -64,21 +50,15 @@ export default function ImagePopUpScreen() {
       }
       try {
         dispatch(setShareButtonClicked(false));
-      } catch (err) {
-        // ignore if not available
-      }
-
+      } catch (err) {}
       try {
         if (navigation && typeof navigation.canGoBack === 'function' && navigation.canGoBack()) {
           navigation.goBack();
         }
-      } catch (err) {
-        // fail silently if navigation isn't available
-      }
+      } catch (err) {}
     });
   }, [dispatch, navigation, opacity]);
 
-  // fallback: if no post selected show a clear message + allow closing
   if (!selectedPost) {
     return (
       <View style={styles.container}>
@@ -100,64 +80,88 @@ export default function ImagePopUpScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Tappable backdrop: closes popup. remains full-screen but transparent so content behind isn't visible. */}
-      <TouchableOpacity
-        activeOpacity={1}
-        style={RNStyleSheet.absoluteFill}
-        onPress={handleClosePopup}
-      />
+    <View style={styles.container}>
+      {/* Header with back button */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleClosePopup} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>POST</Text>
+      </View>
 
-      {/* Full-screen animated content (no box, fills entire screen) */}
-      <TouchableWithoutFeedback>
-        <Animated.View
-          style={[
-            styles.fullScreen,
-            {
-              opacity: opacity,
-            },
-          ]}
-        >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
+      {/* Full-screen ScrollView */}
+      <ScrollView style={styles.bodyContainer}>
+        {/* Tappable backdrop */}
+        <TouchableOpacity
+          activeOpacity={1}
+          style={RNStyleSheet.absoluteFill}
+          onPress={handleClosePopup}
+        />
+
+        <TouchableWithoutFeedback>
+          <Animated.View
+            style={[
+              styles.fullScreen,
+              { opacity },
+            ]}
           >
-            <View style={styles.contentWrapper}>{renderPopupContent()}</View>
-          </ScrollView>
-        </Animated.View>
-      </TouchableWithoutFeedback>
-    </ScrollView>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.contentWrapper}>{renderPopupContent()}</View>
+            </ScrollView>
+          </Animated.View>
+        </TouchableWithoutFeedback>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // full-screen container; background set to black so media (images/videos) appear correctly
   container: {
-    padding:"30px",
     flex: 1,
-    backgroundColor: 'white', 
+    backgroundColor: 'white',
     
-    // remove the gray overlay; black is common for media viewers
   },
-  // full-screen content (no rounded corners, no shadow)
+  bodyContainer:{
+   flex: 1,
+    backgroundColor: 'white',
+    
+    padding:20
+  },
+  header: {
+    height: 60,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e1e4e8',
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
   fullScreen: {
     flex: 1,
-    width: "100%",
-    height: "100%",
-    backgroundColor: 'transparent', // let the content decide its own background
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'transparent',
   },
-  // ensure the ScrollView fills the screen
   scrollContent: {
     flexGrow: 1,
   },
-  // content wrapper that contains the Reel component; takes full space
   contentWrapper: {
     flex: 1,
     width: '100%',
     height: '100%',
   },
   noPostText: {
-    color: '#fff',
+    color: '#000',
     textAlign: 'center',
     marginTop: 40,
     fontSize: 16,
@@ -168,10 +172,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 6,
-    backgroundColor: '#fff',
+    backgroundColor: '#000',
   },
   closeButtonText: {
-    color: '#000',
+    color: '#fff',
     fontWeight: '600',
   },
 });

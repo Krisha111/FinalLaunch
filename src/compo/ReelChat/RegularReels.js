@@ -1,8 +1,4 @@
-// RegularReels.js
-// Single-file solution using react-native-video only.
-// Usage: parent must pass activeIndex, isPlaying (global play flag for the room),
-//        onTogglePlay(index, newState) callback, isAdmin, socket, room, chat, username.
-
+// src/components/RegularReels.js
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -11,233 +7,281 @@ import {
   ActivityIndicator,
   Text,
   Dimensions,
-  Platform,
 } from "react-native";
-import Video from "react-native-video";
-import { useNavigation } from "@react-navigation/native";
+import { VideoView, useVideoPlayer } from "expo-video";
 
-const { height: WINDOW_HEIGHT, width: WINDOW_WIDTH } = Dimensions.get("window");
+// Get exact device window height
+const { height: WINDOW_HEIGHT } = Dimensions.get("window");
 
 export default function RegularReels({
   reel,
   index,
   activeIndex,
-  isPlaying,         // boolean - global play/pause flag from parent for the room
-  onTogglePlay,      // function(index, newState) -> parent toggles state & emits socket
-  isAdmin = false,
-  socket,
-  room,
   chat = [],
   username = "",
-  onOpenChat,        // open chat callback
+  isAdmin = false,
+  isPlaying,
+  onTogglePlay,
 }) {
-  const videoRef = useRef(null);
+ 
+  const videoUrl = reel?.videoUrl || reel?.photoReelImages?.[0] || "";
+
+  const player = useVideoPlayer(videoUrl, (player) => {
+    player.loop = true;
+    player.muted = true;
+    player.volume = 0;
+  });
+
+  const mountedRef = useRef(true);
+  const hasPlayedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [buffering, setBuffering] = useState(false);
-  const navigation = useNavigation();
+  const [ready, setReady] = useState(false);
 
-  // Local optimistic playing state to make UI snappy — will follow `isPlaying` from parent.
-  const [localPlaying, setLocalPlaying] = useState(Boolean(isPlaying));
+  const isActive = index === activeIndex;
 
-  // Keep localPlaying in sync with parent `isPlaying` when it changes.
+  // -----------------------------
+  // Lifecycle cleanup
+  // -----------------------------
   useEffect(() => {
-    setLocalPlaying(Boolean(isPlaying));
-  }, [isPlaying]);
-
-  const mediaUrl = reel?.videoUrl || reel?.photoReelImages?.[0] || null;
-
-  useEffect(() => {
-    // If this reel is no longer the active one, ensure it's paused locally too.
-    if (index !== activeIndex && localPlaying) {
-      setLocalPlaying(false);
-    }
-    // No deps to control only on activeIndex/localPlaying changes; eslint ignored purposely
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndex]);
-
-  if (!mediaUrl) {
-    return <View style={[styles.reelItem, styles.emptyReel]} />;
-  }
-
-  // decide whether this video should be playing now
-  // shouldPlay is true only when this reel is the active one AND the global/local playing state is true
-  const shouldPlay = index === activeIndex && Boolean(localPlaying);
-
-  // Admin toggles play/pause:
-  const handleTogglePlay = () => {
-    // Only admin controls global playback in your contract
-    if (!isAdmin) return;
-    if (index !== activeIndex) return; // only toggle current active reel
-
-    const newState = !Boolean(localPlaying);
-    // Optimistically update local UI immediately
-    setLocalPlaying(newState);
-
-    // Delegate to parent, which should update the single source of truth and emit socket
-    if (typeof onTogglePlay === "function") {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
       try {
-        onTogglePlay(index, newState);
-      } catch (err) {
-        console.warn("onTogglePlay threw:", err);
+        player.pause();
+        player.muted = true;
+        player.volume = 0;
+      } catch {}
+    };
+  }, [player]);
+
+  // -----------------------------
+  // Detect readiness manually
+  // -----------------------------
+  useEffect(() => {
+    let interval;
+    if (player && !ready && videoUrl) {
+      interval = setInterval(() => {
+        if (!mountedRef.current) return clearInterval(interval);
+        if (player.duration && player.duration > 0) {
+          setReady(true);
+          setLoading(false);
+          clearInterval(interval);
+        }
+      }, 200);
+    }
+    return () => clearInterval(interval);
+  }, [player, videoUrl, ready]);
+
+  // -----------------------------
+  // Auto-play / pause logic
+  // -----------------------------
+  useEffect(() => {
+    if (!player || !mountedRef.current || !videoUrl) return;
+
+    // Pause inactive reels
+    if (!isActive) {
+      try {
+        player.pause();
+        player.muted = true;
+        player.volume = 0;
+        // console.log(`⏸ Reel ${index} is inactive and paused`);
+      } catch {}
+      return;
+    }
+
+    // Active reel logic
+    const timeout = setTimeout(() => {
+      if (!mountedRef.current || !isActive) return;
+
+      try {
+        if (!hasPlayedRef.current) {
+          player.currentTime = 0;
+          hasPlayedRef.current = true;
+        }
+
+        player.muted = false;
+        player.volume = 1.0;
+
+        if (isPlaying) {
+          player.play();
+          // console.log(`▶️ Reel ${index} is playing`);
+        } else {
+          player.pause();
+          // console.log(`⏸ Reel ${index} is paused`);
+        }
+      } catch (e) {
+        console.warn("Video control error:", e);
       }
-    } else {
-      // fallback — no parent handler: attempt to emit directly (not ideal; prefer parent)
-      if (socket && room) {
-        socket.emit("reel_play", { room, index, isPlaying: newState });
+    }, 100);
+
+    return () => clearTimeout(timeout);
+  }, [isActive, isPlaying, player, videoUrl]);
+   useEffect(() => {
+  console.log(`Reel ${index}: activeIndex=${activeIndex}, isActive=${isActive}`);
+  
+
+}, [activeIndex, index, isActive]);
+
+  // -----------------------------
+  // Ensure play on mount for active reel
+  // -----------------------------
+  useEffect(() => {
+    if (player && isActive) {
+      const playTimeout = setTimeout(() => {
+        try {
+          player.muted = false;
+          player.volume = 1.0;
+          if (isPlaying) player.play();
+          console.log(`▶️ Reel ${index} ensured play after mount`);
+        } catch {}
+      }, 150);
+      return () => clearTimeout(playTimeout);
+    }
+  }, [isActive, isPlaying, player]);
+
+  // -----------------------------
+  // Admin play/pause toggle
+  // -----------------------------
+  const handleTogglePlay = () => {
+    if (!isAdmin || !player || !mountedRef.current || !isActive) return;
+
+    try {
+      if (isPlaying) {
+        player.pause();
+        console.log(`⏸ Admin paused reel ${index}`);
+        onTogglePlay?.(index, false);
+      } else {
+        player.muted = false;
+        player.volume = 1.0;
+        player.play();
+        console.log(`▶️ Admin played reel ${index}`);
+        onTogglePlay?.(index, true);
       }
+    } catch (e) {
+      console.warn("Admin toggle error:", e);
     }
   };
 
-  const handleLoadStart = () => {
-    setLoading(true);
-    setBuffering(false);
-  };
+  // -----------------------------
+  // Guard for missing video
+  // -----------------------------
+  if (!videoUrl)
+    return <View style={[styles.reelWrapper, styles.emptyReel]} />;
 
-  const handleOnLoad = (data) => {
-    setLoading(false);
-    setBuffering(false);
-  };
-
-  const handleOnBuffer = ({ isBuffering }) => {
-    setBuffering(Boolean(isBuffering));
-  };
-
-  const handleError = (err) => {
-    console.log("Video error:", err);
-    setLoading(false);
-    setBuffering(false);
-  };
-
-  // Render
+  // -----------------------------
+  // Render UI
+  // -----------------------------
   return (
     <View style={styles.reelWrapper}>
-      <View style={styles.reelsMaincontainer}>
-        <View style={styles.videoWrapper}>
-          <TouchableOpacity
-            activeOpacity={0.95}
-            style={styles.touchable}
-            onPress={handleTogglePlay}
+      <VideoView
+        key={videoUrl}
+        player={player}
+        style={styles.video}
+        contentFit="cover"
+        nativeControls={false}
+        onLoadStart={() => {
+          if (!ready) setLoading(true);
+          setBuffering(false);
+        }}
+        onLoaded={() => {
+          setReady(true);
+          setLoading(false);
+          setBuffering(false);
+        }}
+        onBuffering={(b) => {
+          setBuffering(b);
+          if (!b) setLoading(false);
+        }}
+        onError={(e) => {
+          console.warn("Video load error:", e);
+          setLoading(false);
+          setReady(true);
+        }}
+      />
+
+      {/* Chat overlay */}
+      <View style={styles.overlayChat}>
+        {chat.slice(-3).map((c, i) => (
+          <View
+            key={i}
+            style={[
+              styles.overlayBubble,
+              c.sender === username
+                ? styles.overlaySent
+                : styles.overlayReceived,
+            ]}
           >
-            <Video
-              ref={videoRef}
-              source={{ uri: mediaUrl }}
-              style={styles.video}
-              resizeMode="cover"
-              repeat={true}
-              paused={!shouldPlay}       // <-- key: react-native-video controlled playback
-              onLoadStart={handleLoadStart}
-              onLoad={handleOnLoad}
-              onBuffer={handleOnBuffer}
-              onError={handleError}
-              playWhenInactive={false}
-              playInBackground={false}
-              ignoreSilentSwitch={"ignore"}
-              // onProgress can be used if you want to sync timestamps between admin/viewers
-              // onProgress={({ currentTime }) => { /* optional */ }}
-            />
-
-            {/* Overlay messages */}
-            <View style={styles.overlayChat}>
-              {chat.slice(-3).map((c, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.overlayBubble,
-                    c.sender === username ? styles.overlaySent : styles.overlayReceived,
-                  ]}
-                >
-                  <Text style={styles.overlaySender}>{c.sender}</Text>
-                  <Text style={styles.overlayText}>
-                    {typeof c.message === "string" ? c.message : JSON.stringify(c.message)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Floating Chat Button */}
-            {/* <TouchableOpacity
-              style={styles.chatButton}
-              onPress={() => {
-                if (typeof onOpenChat === "function") onOpenChat();
-                else navigation.navigate("ChatScreen", { room, chat, username });
-              }}
-            >
-              <Text style={styles.chatButtonText}>💬</Text>
-            </TouchableOpacity> */}
-
-            {/* Loading / Buffering overlay */}
-            {(loading || buffering) && (
-              <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color="#fff" />
-                <Text style={styles.loadingText}>
-                  {buffering ? "Buffering..." : "Loading..."}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
+            <Text style={styles.overlaySender}>{c.sender}</Text>
+            <Text style={styles.overlayText}>
+              {typeof c.message === "string"
+                ? c.message
+                : JSON.stringify(c.message)}
+            </Text>
+          </View>
+        ))}
       </View>
+
+      {/* Loading overlay */}
+      {(loading || buffering) && !ready && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loadingText}>
+            {buffering ? "Buffering..." : "Loading..."}
+          </Text>
+        </View>
+      )}
+
+      {/* Touchable overlay (admin only) */}
+      <TouchableOpacity
+        style={styles.touchable}
+        activeOpacity={1}
+        onPress={isAdmin ? handleTogglePlay : undefined}
+      />
     </View>
   );
 }
 
+// -----------------------------
+// Styles
+// -----------------------------
 const styles = StyleSheet.create({
   reelWrapper: {
-    height: "100%",
     width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  reelsMaincontainer: {
+    height: WINDOW_HEIGHT,
     position: "relative",
-    borderRadius: 14,
-    height: "98%",
-    width: Platform.OS === "web" ? "60%" : "100%", // adjust as needed
-    maxWidth: 700,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 6,
     backgroundColor: "#000",
-    overflow: "hidden",
-  },
-  videoWrapper: {
-    height: "100%",
-    width: "100%",
-    position: "relative",
-  },
-  touchable: {
-    width: "100%",
-    height: "100%",
   },
   video: {
+    position: "absolute",
+    top: 0,
+    left: 0,
     width: "100%",
     height: "100%",
-    backgroundColor: "#000",
+  },
+  touchable: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
   },
   loadingOverlay: {
     position: "absolute",
-    left: 0,
     top: 0,
-    right: 0,
-    bottom: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "rgba(0,0,0,0.45)",
   },
-  loadingText: {
-    marginTop: 8,
-    color: "#fff",
-  },
-
+  loadingText: { marginTop: 8, color: "#fff" },
   overlayChat: {
     position: "absolute",
     bottom: 90,
     left: 10,
-    right: 80,
-    flexDirection: "column",
+    right: 10,
   },
   overlayBubble: {
     padding: 8,
@@ -253,32 +297,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(240,240,240,0.95)",
     alignSelf: "flex-start",
   },
-  overlaySender: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  overlayText: {
-    fontSize: 14,
-    color: "#000",
-  },
-
-  chatButton: {
-    position: "absolute",
-    bottom: 25,
-    right: 15,
-    backgroundColor: "#ff4081",
-    borderRadius: 30,
-    padding: 12,
-    zIndex: 20,
-    elevation: 20,
-  },
-  chatButtonText: {
-    fontSize: 20,
-    color: "#fff",
-  },
-
-  emptyReel: {
-    backgroundColor: "#111",
-  },
+  overlaySender: { fontSize: 10, fontWeight: "bold", color: "#333" },
+  overlayText: { fontSize: 14, color: "#000" },
+  emptyReel: { backgroundColor: "#111" },
 });

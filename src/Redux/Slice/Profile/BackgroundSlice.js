@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
-
+import API_CONFIG from "../../../config/api";
 // -------------------- THUNKS --------------------
 
 // Remove background using remove.bg API
@@ -14,7 +14,7 @@ export const removeBackgroundThunk = createAsyncThunk(
       formData.append("image", file); // matches multer field name
 
       const response = await axios.post(
-        "http://localhost:8000/api/background/remove-background",
+        `https://finallaunchbackend.onrender.com/api/background/remove-background`,
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },

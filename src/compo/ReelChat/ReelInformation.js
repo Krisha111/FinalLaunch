@@ -1,12 +1,12 @@
+
 // src/components/ReelChat/ReelInformation.js
 //
-// SOLUTION (complete file):
-// - Ensures comments update after posting by using the `commentOnReel` thunk
-//   and updating a local comments state that is kept in sync with Redux.
-// - Uses a robust selector to find the updated reel either in `reels` or `mainPageReels`.
-// - Awaits the comment dispatch result and updates UI optimistically from the returned updated reel.
-// - Handles user selector flexibly (accounts for signUpAuth or signInAuth slice names).
-// - DOES NOT SKIP ANY CODE — full file below.
+// PREMIUM UI SOLUTION (complete file):
+// - Modern, clean design with smooth animations
+// - Enhanced visual hierarchy and spacing
+// - Premium color scheme and typography
+// - Improved user experience with better interactions
+// - All functionality preserved from original
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -17,14 +17,18 @@ import {
   ScrollView,
   StyleSheet,
   Image,
+  StatusBar,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
-import { Ionicons } from '@expo/vector-icons'; // IoHeart, IoHeartOutline, IoChatbubbleOutline, IoSend
-import { FontAwesome5 } from '@expo/vector-icons'; // FaMicrophoneAlt
-import { MaterialIcons } from '@expo/vector-icons'; // MdAccessTimeFilled
-import { MaterialCommunityIcons } from '@expo/vector-icons'; // AiFillPicture equivalent
-import { Entypo } from '@expo/vector-icons'; // BsEmojiKiss, BsEmojiKissFill
+import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Entypo } from '@expo/vector-icons';
 
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -42,16 +46,19 @@ dayjs.extend(relativeTime);
 
 export default function ReelInformation() {
   const route = useRoute();
-  const { reel } = route.params || {}; // reel passed via navigation
+  const { reel } = route.params || {};
   const dispatch = useDispatch();
   const navigation = useNavigation();
 
-  // Support either signUpAuth or signInAuth naming (some files used different slice names)
+  // Animation values
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [slideAnim] = useState(new Animated.Value(50));
+
+  // Support either signUpAuth or signInAuth naming
   const user = useSelector(
     (state) => state.signUpAuth?.user || state.signInAuth?.user || null
   );
 
-  
   const updatedReel = useSelector((state) => {
     if (!reel?._id) return undefined;
     const fromReels = state.reelNewDrop?.reels?.find((r) => r._id === reel._id);
@@ -70,8 +77,9 @@ export default function ReelInformation() {
   const [currentComment, setCurrentComment] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
-  // Local comments array (keeps UI responsive and updates when Redux changes)
+  // Local comments array
   const [localComments, setLocalComments] = useState(
     updatedReel?.comments || reel?.comments || []
   );
@@ -79,36 +87,50 @@ export default function ReelInformation() {
   // Derived flags
   const isLiked = Boolean((updatedReel?.likes || reel?.likes || []).includes(user?._id));
 
-  // Fetch reels initially so store is populated (keeps consistent with previous behavior)
+  // Fetch reels initially
   useEffect(() => {
     dispatch(fetchReels());
   }, [dispatch]);
 
-  // Keep local like/comment state in sync when the store updates for this reel
+  // Entrance animation
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  // Keep local state in sync
   useEffect(() => {
     if (updatedReel) {
       setLiked(Boolean(updatedReel.likes?.includes(user?._id)));
       setLikeCount(updatedReel.likes?.length || 0);
       setLocalComments(updatedReel.comments || []);
     } else {
-      // fallback to the route-provided reel
       setLiked(Boolean(reel?.likes?.includes(user?._id)));
       setLikeCount(reel?.likes?.length || 0);
       setLocalComments(reel?.comments || []);
     }
   }, [updatedReel, reel?.comments, user?._id, reel?.likes]);
 
-  // Send comment: dispatch thunk and wait for the updated reel result then update local comments
+  // Send comment handler
   const handleSendComment = async () => {
     if (!user) {
-      // optional: navigate to login or show message
       console.warn('Not logged in — cannot comment');
       return;
     }
     if (!currentComment.trim()) return;
 
     try {
-      // dispatch and await the result (thunk should return the updated reel or { reel: ... })
       const result = await dispatch(
         commentOnReel({
           reelId: reel._id,
@@ -116,21 +138,16 @@ export default function ReelInformation() {
         })
       ).unwrap();
 
-      // backend may return updated reel as `result` or `{ reel: ... }`
       const updated = result?.reel ? result.reel : result;
 
       if (updated && updated._id === reel._id) {
-        // Replace local comments with server's authoritative list
         setLocalComments(updated.comments || []);
-        // also update local like/comment counts if returned
         setLikeCount(updated.likes?.length ?? likeCount);
       } else {
-        // If backend didn't return, fallback to refetch (less ideal)
         dispatch(fetchReels());
       }
     } catch (err) {
       console.error('Failed to post comment', err);
-      // optional: show error UI
     } finally {
       setCurrentComment('');
     }
@@ -138,24 +155,23 @@ export default function ReelInformation() {
 
   const toggleLiked = () => {
     if (!reel?._id) return;
-    // Optimistic UI update
     setLiked((prev) => !prev);
     setLikeCount((prev) => (liked ? Math.max(prev - 1, 0) : prev + 1));
-    // send to backend — slice will upsert the returned updated reel into store
     dispatch(toggleLikeReel({ reelId: reel._id }));
   };
 
   if (!reel) {
     return (
       <View style={styles.container}>
-        <Text style={{ color: 'red', textAlign: 'center', marginTop: 20 }}>
-          No reel data passed!
-        </Text>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color="#FF6B6B" />
+          <Text style={styles.errorText}>No reel data available</Text>
+        </View>
       </View>
     );
   }
 
-  // Avatar helper
+  // Avatar component
   const Avatar = () => {
     const sourceImage = updatedReel?.user?.profileImage || reel?.user?.profileImage;
     if (sourceImage) {
@@ -170,68 +186,130 @@ export default function ReelInformation() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Bio & header area */}
-      <View style={styles.commentContainer}>
-        <View style={styles.scrollCommentsBossyContainer}>
-          <View style={styles.bioContainer}>
-            <View style={styles.userRow}>
-              <Avatar />
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      
+      <Animated.View
+        style={[
+          styles.content,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
+      >
+        {/* Header Section */}
+        <View style={styles.headerSection}>
+          <View style={styles.userInfoContainer}>
+            <Avatar />
+            <View style={styles.userDetails}>
+              <Text style={styles.displayName}>Krisha</Text>
               <Text style={styles.username}>@{reel?.user?.username || 'Unknown User'}</Text>
             </View>
+          </View>
 
-            {reel?.reelScript ? (
+          {reel?.reelScript ? (
+            <View style={styles.scriptContainer}>
               <Text style={styles.scriptText}>{reel.reelScript}</Text>
-            ) : null}
+            </View>
+          ) : null}
 
+          <View style={styles.metaInfo}>
             <View style={styles.timeContainer}>
-              <MaterialIcons name="access-time" size={16} color="gray" />
+              <MaterialIcons name="access-time" size={14} color="#8E8E93" />
               <Text style={styles.timeText}>
                 {reel?.createdAt && dayjs(reel.createdAt).fromNow()}
               </Text>
             </View>
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Ionicons
+                  name={liked ? 'heart' : 'heart-outline'}
+                  size={16}
+                  color={liked ? '#FF3B30' : '#8E8E93'}
+                />
+                <Text style={styles.statText}>{likeCount}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Ionicons name="chatbubble-outline" size={16} color="#8E8E93" />
+                <Text style={styles.statText}>{localComments.length}</Text>
+              </View>
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Comments Section */}
-      <View
-        style={[
-          styles.commentContainerBossyContainer,
-          showCommentFooter ? styles.commentActive : styles.notActive,
-        ]}
-      >
-        <ScrollView style={styles.scrollComments}>
-          <View style={styles.commentsWrapper}>
-            {/* Pass localComments (keeps UI in sync with backend result) */}
+        {/* Comments Section */}
+        <View style={styles.commentsSection}>
+          <View style={styles.commentsSectionHeader}>
+            <Text style={styles.commentsTitle}>Comments</Text>
+            <Text style={styles.commentsCount}>{localComments.length}</Text>
+          </View>
+          
+          <ScrollView
+            style={styles.scrollComments}
+            contentContainerStyle={styles.scrollContentContainer}
+            showsVerticalScrollIndicator={false}
+          >
             <ReelChatCommment reelId={reel._id} comments={localComments} />
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </View>
 
-        {/* Footer for adding a comment (kept at bottom of screen if desired) */}
-        <View style={styles.footerContainer}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-            <TextInput
-              value={currentComment}
-              onChangeText={setCurrentComment}
-              placeholder="Add a comment..."
-              style={styles.inputComment}
+        {/* Comment Input Footer */}
+        <View style={[styles.footerContainer, inputFocused && styles.footerFocused]}>
+          <View style={styles.footerInner}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => setShowEmojiPicker(true)}
+            >
+              <Ionicons name="happy-outline" size={24} 
+              color="black" />
+            </TouchableOpacity>
+
+            <View style={[styles.inputWrapper, inputFocused && styles.inputWrapperFocused]}>
+              <TextInput
+                style={styles.inputComment}
+                placeholder="Add a comment..."
+                placeholderTextColor="grey"
+                value={currentComment}
+                onChangeText={setCurrentComment}
+                multiline
+                maxLength={500}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                currentComment.trim().length > 0 && styles.sendButtonActive,
+              ]}
+              onPress={handleSendComment}
+              disabled={!currentComment.trim()}
+            >
+              <Ionicons
+                name="send"
+                size={20}
+                color={currentComment.trim().length > 0 ? '#FFFFFF' : '#C7C7CC'}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.likeButtonFooter}
+            onPress={toggleLiked}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={liked ? 'heart' : 'heart-outline'}
+              size={28}
+              color={liked ? '#FF3B30' : '#8E8E93'}
             />
-          </View>
-
-          <View style={styles.iconWrapperContainer}>
-            <TouchableOpacity onPress={() => setShowEmojiPicker((s) => !s)}>
-              <Entypo name="emoji-happy" size={20} />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={handleSendComment}>
-              <Ionicons name="send" size={20} color="#333" />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={toggleLiked}>
-              <Ionicons name={liked ? 'heart' : 'heart-outline'} size={22} color={liked ? 'red' : '#333'} />
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Emoji picker */}
@@ -242,98 +320,247 @@ export default function ReelInformation() {
             onEmojiSelect={(emoji) => setCurrentComment((c) => c + emoji)}
           />
         )}
-      </View>
-    </View>
+      </Animated.View>
+    </KeyboardAvoidingView>
   );
 }
 
-const AVATAR_SIZE = 36;
+const AVATAR_SIZE = 48;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, flexDirection: 'column', overflow: 'hidden' },
-  commentContainer: { width: '100%' },
-  commentContainerBossyContainer: {},
-  commentActive: { flex: 0.8 },
-  notActive: { flex: 0.87 },
-  scrollComments: {},
-  scrollCommentsBossyContainer: {
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  content: {
     flex: 1,
   },
-  bioContainer: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'lightgray',
-  },
-  userRow: {
-    flexDirection: 'row',
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    backgroundColor: '#FFFFFF',
   },
-  username: {
-    fontWeight: 'bold',
-    fontSize: 14,
-    marginLeft: 8,
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#FF6B6B',
+    fontWeight: '600',
   },
-  scriptText: {
-    fontSize: 13,
-    color: '#333',
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 5,
-  },
-  timeText: { marginLeft: 5, fontSize: 12, color: 'gray' },
-  commentsWrapper: { width: '100%' },
 
-  // Avatar styles
+  // Header Section
+  headerSection: {
+    backgroundColor: '#FFFFFF',
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  userInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   avatarImage: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: '#ddd',
+    backgroundColor: '#E5E5EA',
+    borderWidth: 2,
+    borderColor: '#F8F9FA',
   },
   avatarFallback: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: '#cfcfcf',
+    backgroundColor: '#8ce474ff',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#F8F9FA',
   },
-  avatarLetter: { fontWeight: '700', color: '#333' },
-
-  footerContainer: {
+  avatarLetter: {
+    fontWeight: '700',
+    fontSize: 20,
+    color: '#FFFFFF',
+  },
+  userDetails: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  displayName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 2,
+  },
+  username: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#8E8E93',
+  },
+  scriptContainer: {
+    backgroundColor: '#F8F9FA',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#8ce474ff',
+  },
+  scriptText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#1C1C1E',
+    fontWeight: '400',
+  },
+  metaInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  timeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
+  },
+  timeText: {
+    marginLeft: 6,
+    fontSize: 13,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+
+  // Comments Section
+  commentsSection: {
+    flex: 1,
+    marginTop: 16,
+    paddingHorizontal: 20,
+  },
+  commentsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  commentsTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  commentsCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8E8E93',
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  scrollComments: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    paddingBottom: 20,
+  },
+
+  // Footer
+  footerContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: 'lightgray',
+    borderTopColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  footerIconsLeft: {
-    flexDirection: 'row',
-    width: '20%',
-    justifyContent: 'space-around',
+  footerFocused: {
+    borderTopColor: '#8ce474ff',
+    borderTopWidth: 2,
   },
-  footerIconsRight: {
+  footerInner: {
     flexDirection: 'row',
-    width: '20%',
-    justifyContent: 'space-around',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
+  },
+  inputWrapper: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    minHeight: 40,
+    maxHeight: 100,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  inputWrapperFocused: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#8ce474ff',
   },
   inputComment: {
-    flex: 1,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'black',
-    paddingHorizontal: 10,
-    marginRight: 8,
+    fontSize: 15,
+    color: '#000000',
+    fontWeight: '400',
   },
-  iconWrapperContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
+  sendButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    borderRadius: 20,
+    backgroundColor: '#E5E5EA',
+  },
+  sendButtonActive: {
+    backgroundColor: '#8ce474ff',
+  },
+  likeButtonFooter: {
+    position: 'absolute',
+    right: 16,
+    bottom: 60,
+    width: 56,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
 });

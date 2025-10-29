@@ -1,24 +1,29 @@
 // src/screens/ReelNewDrop.js
-import React, { useState  } from "react";
+// ✅ Full version — fixes expo-video crash + ImagePicker deprecation warning
+
+import React, { useState, useEffect , useRef} from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Platform,
+  Alert,
+  Linking,
 } from "react-native";
-import { useNavigation,useRoute } from "@react-navigation/native";
-
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
-import { launchImageLibrary } from "react-native-image-picker";
-import Video from "react-native-video";
-import axios from "axios";
-import { setPhotoReelImages, setaddSlideReels } from "../../../Redux/Slice/MakingNewDrop/Reel.js";
+import * as ImagePicker from "expo-image-picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system/legacy";
+import { Video } from "expo-av"; // ✅ using expo-av instead of expo-video
+import { setPhotoReelImages } from "../../../Redux/Slice/MakingNewDrop/Reel.js";
+
+const BASE_URL = "https://finallaunchbackend.onrender.com";
 
 export default function ReelNewDrop() {
-    const navigation = useNavigation(); 
+  const navigation = useNavigation();
   const loggedInUser = useSelector((state) => state.signUpAuth?.user);
   const dispatch = useDispatch();
   const route = useRoute();
@@ -32,142 +37,198 @@ export default function ReelNewDrop() {
     reelPinned,
   } = useSelector((state) => state.reel);
 
-  const [mediaFiles, setMediaFiles] = useState([]);
-  const [previews, setPreviews] = useState([]);
-  const [index, setIndex] = useState(0);
+  const [videoFile, setVideoFile] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
+const videoRef = useRef(null);
+useEffect(() => {
+  if (videoRef.current) {
+    videoRef.current.playAsync().catch(() => {});
+  }
+}, [preview?.uri]);
 
-  // ===== Select Media =====
-  const selectMedia = () => {
+  useEffect(() => {
+    if (preview && preview.uri) {
+      dispatch(setPhotoReelImages([preview.uri]));
+    } else {
+      dispatch(setPhotoReelImages([]));
+    }
+  }, [preview, dispatch]);
+
+  const ensureMediaPermission = async () => {
+    if (Platform.OS === "web") return true;
+    const { status } = await
+     ImagePicker.getMediaLibraryPermissionsAsync();
+    if (status === "granted") return true;
+    const { status: req } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (req === "granted") return true;
+
+    Alert.alert(
+      "Permission required",
+      "Please allow access to your video in Settings to continue.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Open Settings",
+          onPress: () => Linking.openSettings && Linking.openSettings(),
+        },
+      ]
+    );
+    return false;
+  };
+
+  const selectVideo = async () => {
+    setError(null);
     if (Platform.OS === "web") {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = "image/*,video/*";
-      input.multiple = true;
-
+      input.accept = "video/*";
       input.onchange = (e) => {
-        const files = Array.from(e.target.files);
-        if (!files.length) return;
-
-        const assets = files.map((file) => ({
+        const file = e.target.files[0];
+        if (!file) return;
+        const asset = {
           uri: URL.createObjectURL(file),
-          type: file.type,
+          type: file.type || "video/mp4",
           name: file.name,
-          fileObject: file, // keep the actual file for upload
-        }));
-
-        setMediaFiles((prev) => [...prev, ...assets]);
-        setPreviews((prev) => [...prev, ...assets]);
-        dispatch(
-          setPhotoReelImages([
-            ...previews.map((p) => p.uri),
-            ...assets.map((p) => p.uri),
-          ])
-        );
+          fileObject: file,
+        };
+        setVideoFile(asset);
+        setPreview({ uri: asset.uri, type: asset.type });
       };
-
       input.click();
     } else {
-      launchImageLibrary(
-        { mediaType: "mixed", selectionLimit: 0 },
-        (response) => {
-          if (response.didCancel) return;
-          if (response.errorCode) {
-            setError(response.errorMessage || "Error selecting media");
-            return;
-          }
+      const ok = await ensureMediaPermission();
+      if (!ok) return;
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: [ImagePicker.MediaType.video], // ✅ fixed deprecated option
+          allowsMultipleSelection: false,
+          quality: 0.9,
+        });
 
-          const assets = response.assets || [];
-          setMediaFiles((prev) => [...prev, ...assets]);
-          setPreviews((prev) => [...prev, ...assets]);
-          dispatch(
-            setPhotoReelImages([
-              ...previews.map((p) => p.uri),
-              ...assets.map((p) => p.uri),
-            ])
-          );
-        }
-      );
+        if (!result || result.canceled) return;
+        const asset = result.assets?.[0];
+        if (!asset) return;
+
+        const mapped = {
+          uri: asset.uri,
+          type: asset.type ?? "video/mp4",
+          name: asset.fileName ?? asset.uri?.split("/").pop(),
+        };
+        setVideoFile(mapped);
+        setPreview({ uri: mapped.uri, type: mapped.type });
+      } catch (err) {
+        console.error("selectVideo error:", err);
+        setError("Failed to pick a video.");
+      }
     }
   };
 
-  // ===== Slider Controls =====
-  const prevSlide = () =>
-    setIndex((i) => (i === 0 ? Math.max(previews.length - 1, 0) : i - 1));
-  const nextSlide = () =>
-    setIndex((i) => (previews.length === 0 ? 0 : (i + 1) % previews.length));
-
-  // ===== Upload Function =====
+  // ===== Unified upload: Web vs React Native =====
   const handleMakeItOfficial = async () => {
     setError(null);
 
-    const token = await localStorage.getItem("token");
-    if (!token) return setError("Login required.");
-    if (!poster) return setError("Please choose a cover photo.");
-    if (!mediaFiles.length)
-      return setError("Please choose at least one image or video.");
-
-    setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("reelScript", reelScript);
-      formData.append("reelLocation", reelLocation);
-      formData.append("reelCommenting", reelCommenting);
-      formData.append("reelLikeCountVisible", reelLikeCountVisible);
-      formData.append("reelShareCountVisible", reelShareCountVisible);
-      formData.append("reelPinned", reelPinned);
-      formData.append("type", postType || "regular");
-      if (Platform.OS === 'web') {
-  // Convert data URI to a Blob/File
-  const base64Response = await fetch(poster.uri);
-  const blob = await base64Response.blob();
-  const file = new File([blob], "poster.jpg", { type: blob.type });
-  formData.append("poster", file);
-} else {
-  // React Native
-  formData.append("poster", {
-    uri: poster.uri,
-    type: poster.type || "image/jpeg",
-    name: poster.fileName || "poster.jpg",
-  });
-}
+      const token =
+        Platform.OS === "web"
+          ? localStorage.getItem("token")
+          : await AsyncStorage.getItem("token");
 
-{console.log("poster",poster)}
-      mediaFiles.forEach((file) => {
-        // web files use `fileObject`, mobile files use `uri/fileName/type`
-        formData.append(
-          "reelFiles",
-          Platform.OS === "web"
-            ? file.fileObject
-            : {
-                uri: file.uri,
-                type: file.type,
-                name: file.fileName || "file",
-              }
-        );
-      });
+      if (!token) {
+        setError("Login required.");
+        return;
+      }
+      if (!poster) {
+        setError("Please choose a cover photo.");
+        return;
+      }
+      if (!videoFile) {
+        setError("Please choose a video.");
+        return;
+      }
 
-      const response = await axios.post(
-        "http://localhost:8000/api/reels/newReelDrop",
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
+      setUploading(true);
+
+      if (Platform.OS === "web") {
+        // --- Web upload ---
+        const formData = new FormData();
+        formData.append("reelScript", reelScript ?? "");
+        formData.append("reelLocation", reelLocation ?? "");
+        formData.append("reelCommenting", String(reelCommenting ?? true));
+        formData.append("reelLikeCountVisible", String(reelLikeCountVisible ?? ""));
+        formData.append("reelShareCountVisible", String(reelShareCountVisible ?? ""));
+        formData.append("reelPinned", String(reelPinned ?? ""));
+        formData.append("type", postType || "regular");
+
+        formData.append("poster", poster.fileObject);
+        formData.append("reelFiles", videoFile.fileObject);
+
+        const res = await fetch(`${BASE_URL}/api/reels/newReelDrop`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+
+        const text = await res.text();
+        let data = null;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch (e) {
+          console.warn(e);
         }
-      );
 
-      if (response.status === 200 || response.status === 201) {
-        // ✅ Navigate to any user's profile (your own in this case)
-        navigation.navigate("ProfileScreen", { userId: loggedInUser._id });
+        if (res.ok) {
+          navigation.navigate("ProfileScreen", { userId: loggedInUser._id });
+        } else {
+          setError(data?.message || `Server error: ${res.status}`);
+        }
       } else {
-        setError("Unexpected server response.");
+        // --- React Native upload ---
+        const uploadUrl = `${BASE_URL}/api/reels/newReelDrop`;
+
+        const uploadResult = await FileSystem.uploadAsync(uploadUrl, videoFile.uri, {
+          httpMethod: "POST",
+          fieldName: "reelFiles",
+          headers: { Authorization: `Bearer ${token}` },
+          parameters: {
+            reelScript: reelScript ?? "",
+            reelLocation: reelLocation ?? "",
+            reelCommenting: String(reelCommenting ?? true),
+            reelLikeCountVisible: String(reelLikeCountVisible ?? ""),
+            reelShareCountVisible: String(reelShareCountVisible ?? ""),
+            reelPinned: String(reelPinned ?? ""),
+            type: postType || "regular",
+          },
+        });
+
+        let data = null;
+        try {
+          data = JSON.parse(uploadResult.body);
+        } catch (e) {
+          console.warn(e);
+        }
+
+        if (uploadResult.status >= 200 && uploadResult.status < 300) {
+          if (poster?.uri) {
+            await FileSystem.uploadAsync(
+              `${BASE_URL}/api/reels/${data.reel._id}/poster`,
+              poster.uri,
+              {
+                httpMethod: "POST",
+                fieldName: "poster",
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            );
+          }
+          navigation.navigate("ProfileScreen", { userId: loggedInUser._id });
+        } else {
+          setError(data?.message || `Server error: ${uploadResult.status}`);
+        }
       }
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.message || "Upload failed.");
+      console.error("❌ UPLOAD ERROR:", err);
+      setError(`Upload failed: ${err.message}`);
     } finally {
       setUploading(false);
     }
@@ -175,78 +236,78 @@ export default function ReelNewDrop() {
 
   return (
     <View style={styles.container}>
+     
       <View style={styles.sliderContainer}>
-        {previews.length > 0 ? (
-          <>
-            {previews[index]?.type?.startsWith("video") ? (
-              <Video
-                source={{ uri: previews[index].uri }}
-                style={styles.media}
-                controls
-                resizeMode="cover"
-              />
-            ) : (
-              <Image source={{ uri: previews[index].uri }} style={styles.media} />
-            )}
+      
+        {preview && preview.uri ? (
+          Platform.OS === "web" ? (
+            <video
+              src={preview.uri}
+              controls
+              autoPlay
+              loop
+              style={{ width: "100%", height: "100%", borderRadius: 12 }}
+            />
+          ) : (
+            <Video
+  ref={videoRef}                  // <-- Add ref
+  source={{ uri: preview.uri }}
+  style={styles.media}
+  resizeMode="cover"
+  isLooping
+  useNativeControls                // <-- keep native controls
+/>
 
-            {previews.length > 1 && (
-              <>
-                <TouchableOpacity
-                  style={[styles.sliderButton, { left: 10 }]}
-                  onPress={prevSlide}
-                >
-                  <Text style={styles.sliderButtonText}>❮</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.sliderButton, { right: 10 }]}
-                  onPress={nextSlide}
-                >
-                  <Text style={styles.sliderButtonText}>❯</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </>
+            // <Video
+            //   source={{ uri: preview.uri }}
+            //   style={styles.media}
+            //   resizeMode="cover"
+            //   shouldPlay
+            //   isLooping
+            //   useNativeControls
+            // />
+          )
         ) : (
-          <Text style={styles.noImageText}>No images/videos uploaded</Text>
+          <Text style={styles.noImageText}>No video uploaded</Text>
         )}
       </View>
 
-      <TouchableOpacity style={styles.selectButton} onPress={selectMedia}>
-        <Text style={styles.buttonText}>Select Media</Text>
+      <TouchableOpacity style={styles.selectButton} onPress={selectVideo}>
+        <Text style={styles.buttonText}>Select Video</Text>
       </TouchableOpacity>
 
       <View style={styles.bottomContainer}>
-        {/* <TouchableOpacity
-          onPress={() => dispatch(setaddSlideReels(true))}
-          style={styles.bottomButton}
-        >
-          <Text>BACK</Text>
-        </TouchableOpacity> */}
-
         <TouchableOpacity
           onPress={handleMakeItOfficial}
-          style={[styles.bottomButton,
-             { opacity: uploading ? 0.6 : 1 }]}
+          style={[styles.bottomButton, { opacity: uploading ? 0.6 : 1 }]}
+          disabled={uploading}
         >
-          {uploading ? <ActivityIndicator /> :
-           <Text  style={styles.makeContainerSetting}>MAKE IT OFFICIAL</Text>}
+          {uploading ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.makeContainerSetting}>MAKE IT OFFICIAL</Text>
+          )}
         </TouchableOpacity>
       </View>
 
-      {error && <Text style={{ color: "red", marginTop: 10 }}>{error}</Text>}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 10 },
-  makeContainerSetting:{
-
-fontWeight:600,
-padding:20,
-borderRadius:10,
-backgroundColor:"green",
-color:"white"
+  makeContainerSetting: {
+    fontWeight: "600",
+    padding: 20,
+    borderRadius: 10,
+    backgroundColor: "green",
+    color: "white",
+    textAlign: "center",
   },
   sliderContainer: {
     width: "100%",
@@ -254,21 +315,14 @@ color:"white"
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 12,
+    backgroundColor: "#f6f6f6",
+    overflow: "hidden",
   },
   media: { width: "100%", height: "100%", borderRadius: 12 },
-  sliderButton: {
-    position: "absolute",
-    top: "50%",
-    transform: [{ translateY: -12 }],
-    backgroundColor: "rgba(0,0,0,0.5)",
-    padding: 10,
-    borderRadius: 50,
-  },
-  sliderButtonText: { color: "#fff", fontSize: 24 },
-  noImageText: { marginBottom: 10 },
+  noImageText: { marginBottom: 10, color: "#666" },
   selectButton: {
     marginVertical: 10,
-    padding: 10,
+    padding: 12,
     backgroundColor: "#ddd",
     borderRadius: 6,
     alignItems: "center",
@@ -279,5 +333,20 @@ color:"white"
     justifyContent: "space-between",
     marginTop: 20,
   },
- 
+  bottomButton: {
+    flex: 1,
+  },
+  errorContainer: {
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: "#fee",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#fcc",
+  },
+  errorText: {
+    color: "#c00",
+    fontSize: 13,
+    lineHeight: 18,
+  },
 });

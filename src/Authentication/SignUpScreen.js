@@ -1,5 +1,6 @@
-// src/Authentication/SignUp.js
-// Updated: added box shadow to the main container and input rows for a subtle elevation effect
+// ✅ src/Authentication/SignUp.js — FINAL MERGED VERSION WITH BACKGROUND IMAGE
+// Includes logo + welcome text, centered signup form, in-app policy links,
+// secure store handling, navigation, and boxShadow styles.
 
 import React, { useState, useEffect } from "react";
 import {
@@ -7,9 +8,14 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Image,
   StyleSheet,
   Platform,
+  StatusBar,
+  ScrollView,
+  ImageBackground,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch } from "react-redux";
 import { signUpUser, setCredentials } from "../Redux/Slice/Authentication/SignUp.js";
 import * as SecureStore from "expo-secure-store";
@@ -17,9 +23,13 @@ import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import MaterialIcon from "react-native-vector-icons/MaterialIcons";
 
+const logoImage = require("../../assets/images/LogoWelCome.png");
+const backgroundImage = require("../../assets/images/FinalBack.png"); // Add your background image
+
 export default function SignUp({ setIsSignUp }) {
   const dispatch = useDispatch();
   const navigation = useNavigation();
+  const [showPassword, setShowPassword] = useState(false);
 
   const [localUsername, setLocalUsername] = useState("");
   const [localEmail, setLocalEmail] = useState("");
@@ -76,7 +86,11 @@ export default function SignUp({ setIsSignUp }) {
 
       const user = backendData.user
         ? backendData.user
-        : { username: backendData.username, email: backendData.email, _id: backendData._id };
+        : {
+          username: backendData.username,
+          email: backendData.email,
+          _id: backendData._id,
+        };
 
       const token = backendData.token;
 
@@ -85,7 +99,7 @@ export default function SignUp({ setIsSignUp }) {
       await saveSecureItem("token", token);
       await saveSecureItem("user", JSON.stringify(user));
 
-      navigation.replace("Home");
+      navigation.replace("MainTab");
     } else {
       setErrorMessage(resultAction.payload?.message || "Signup failed");
     }
@@ -97,82 +111,189 @@ export default function SignUp({ setIsSignUp }) {
       const user = await getSecureItem("user");
       if (token && user) {
         dispatch(setCredentials({ token, user: JSON.parse(user) }));
-        navigation.replace("Home");
+        navigation.replace("MainTab");
       }
     };
-
     checkLoggedIn();
   }, []);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.headerTitle}>Sign Up</Text>
+    <ImageBackground
+      source={backgroundImage}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Centered block: header + form */}
+          <View style={styles.centerBlock}>
+            {/* Signup Form */}
+            <View style={styles.container}>
+              <View style={styles.headerRow}>
+                <Image source={logoImage} style={styles.logo} resizeMode="contain" />
+                <Text style={styles.welcomeMsg}>Weocome to ReelChat...!!!</Text>
+              </View>
+              <Text style={styles.headerTitle}>Sign Up</Text>
 
-      <View style={styles.inputRow}>
-        <Icon name="user" size={20} color="#444" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          placeholder="Username"
-          value={localUsername}
-          onChangeText={setLocalUsername}
-        />
-      </View>
+              {/* Username */}
+              <View style={styles.inputRow}>
+                <Icon name="user" size={20} color="#444" style={styles.icon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username"
+                  placeholderTextColor="#888"   // add this
+                  value={localUsername}
+                  onChangeText={setLocalUsername}
+                />
+              </View>
 
-      <View style={styles.inputRow}>
-        <MaterialIcon name="email" size={20} color="#444" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={localEmail}
-          onChangeText={setLocalEmail}
-        />
-      </View>
+              {/* Email */}
+              <View style={styles.inputRow}>
+                <MaterialIcon name="email" size={20} color="#444" style={styles.icon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
 
-      <View style={styles.inputRow}>
-        <Icon name="lock" size={20} color="#444" style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          secureTextEntry
-          value={localPassword}
-          onChangeText={setLocalPassword}
-        />
-      </View>
+                  placeholderTextColor="#888"
+                  value={localEmail}
+                  onChangeText={setLocalEmail}
+                />
+              </View>
 
-      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+              {/* Password */}
+              {/* <View style={styles.inputRow}>
+                <Icon name="lock" size={20} color="#444" style={styles.icon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  secureTextEntry
 
-      <TouchableOpacity style={styles.button} onPress={handleSignUp}>
-        <Text style={styles.buttonText}>Sign Up</Text>
-      </TouchableOpacity>
+                  placeholderTextColor="#888"
+                  value={localPassword}
+                  onChangeText={setLocalPassword}
+                />
+              </View> */}
+              {/* Password */}
+{/* Password */}
+<View style={styles.inputRow}>
+  <Icon name="lock" size={20} color="#444" style={styles.icon} />
+  <TextInput
+    style={[styles.input, { flex: 1, paddingRight: 10 }]}
+    placeholder="Password"
+    secureTextEntry={!showPassword}
+    placeholderTextColor="#888"
+    value={localPassword}
+    onChangeText={setLocalPassword}
+    autoCapitalize="none"
+    autoCorrect={false}
+  />
+  <TouchableOpacity 
+    onPress={() => setShowPassword(prev => !prev)}
+    style={{ padding: 5 }}
+    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+  >
+    <MaterialIcon
+      name={showPassword ? "visibility" : "visibility-off"}
+      size={22}
+      color="#666"
+    />
+  </TouchableOpacity>
+</View>
 
-      <Text style={styles.termsText}>
-        By signing up, you agree to our Terms of Service and Privacy Policy.
-      </Text>
 
-      <View style={styles.signInRow}>
-        <Text style={styles.signInText}>Already have an account?</Text>
-        <TouchableOpacity onPress={() => setIsSignUp(false)}>
-          <Text style={styles.signInButton}> Sign In</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+              <TouchableOpacity style={styles.button} onPress={handleSignUp}>
+                <Text style={styles.buttonText}>Sign Up</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.termsText}>
+                By signing up, you agree to our{" "}
+                <Text
+                  style={styles.linkText}
+                  onPress={() => navigation.navigate("TermsOfService")}
+                >
+                  Terms of Service
+                </Text>
+                ,{" "}
+                <Text
+                  style={styles.linkText}
+                  onPress={() => navigation.navigate("CookiesPolicy")}
+                >
+                  Cookies Policy
+                </Text>{" "}
+                and{" "}
+                <Text
+                  style={styles.linkText}
+                  onPress={() => navigation.navigate("PrivacyPolicy")}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+
+              <View style={styles.signInRow}>
+                <Text style={styles.signInText}>Already have an account?</Text>
+                <TouchableOpacity onPress={() => navigation.navigate("SignIn")}>
+                  <Text style={styles.signInButton}> Sign In</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  background: {
     flex: 1,
-    padding: 20,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  centerBlock: {
+    width: "100%",
+    alignItems: "center",
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  logo: {
+    borderRadius: 10,
+    width: 60,
+    height: 60,
+    marginRight: 12,
+  },
+  welcomeMsg: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "black",
+    textAlign: "center",
+  },
+  container: {
+    width: "100%",
     backgroundColor: "#fff",
-    // Box shadow for iOS
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    // Box shadow for Android
+    padding: 20,
+    borderRadius: 15,
+    boxShadow: "0px 2px 6px rgba(0,0,0,0.15)", // original box shadow
     elevation: 5,
   },
   headerTitle: {
@@ -190,22 +311,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingBottom: 5,
     backgroundColor: "#fff",
-    // Shadow for input rows
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
+    boxShadow: "0px 1px 1.41px rgba(0,0,0,0.2)", // original box shadow
     elevation: 2,
     borderRadius: 5,
     paddingHorizontal: 10,
   },
   icon: {
-    marginRight: 10,
+    width: 30,
+    textAlign: "center",
   },
   input: {
     flex: 1,
     fontSize: 16,
     paddingVertical: 5,
+    textAlignVertical: "center",
   },
   errorText: {
     color: "red",
@@ -218,10 +337,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    boxShadow: "0px 2px 3.84px rgba(0,0,0,0.25)", // original box shadow
     elevation: 5,
   },
   buttonText: {
@@ -234,6 +350,10 @@ const styles = StyleSheet.create({
     color: "#555",
     textAlign: "center",
     marginBottom: 20,
+  },
+  linkText: {
+    color: "#007bff",
+    textDecorationLine: "underline",
   },
   signInRow: {
     flexDirection: "row",

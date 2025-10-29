@@ -1,63 +1,63 @@
 // src/components/ReelChat/ReelChatCommment.js
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { Audio } from 'expo-av';
+// import { Audio } from 'expo-av';
 import { useDispatch, useSelector } from 'react-redux';
 import Comments from './Comments';
 import EmojiPop from './PopUps/EmojiPop';
 import { commentOnReel } from '../../Redux/Slice/Profile/reelNewDrop.js';
-
+import { Ionicons } from '@expo/vector-icons';
 export default function ReelChatCommment({ reelId, comments }) {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.signUpAuth.user); // adjust if your slice name differs
 
-  const [isRecording, setIsRecording] = useState(false);
-  const [recording, setRecording] = useState(null);
-  const [audioUri, setAudioUri] = useState(null);
+  // const [isRecording, setIsRecording] = useState(false);
+  // const [recording, setRecording] = useState(null);
+  // const [audioUri, setAudioUri] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [currentComment, setCurrentComment] = useState('');
 
   // ---- 🎙 Audio Recording ----
-  const handleStartRecording = async () => {
-    try {
-      if (!isRecording) {
-        setIsRecording(true);
-        const { status } = await Audio.requestPermissionsAsync();
-        if (status !== 'granted') return;
+  // const handleStartRecording = async () => {
+  //   try {
+  //     if (!isRecording) {
+  //       setIsRecording(true);
+  //       const { status } = await Audio.requestPermissionsAsync();
+  //       if (status !== 'granted') return;
 
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
+  //       await Audio.setAudioModeAsync({
+  //         allowsRecordingIOS: true,
+  //         playsInSilentModeIOS: true,
+  //       });
 
-        const newRecording = new Audio.Recording();
-        await newRecording.prepareToRecordAsync(Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY);
-        await newRecording.startAsync();
-        setRecording(newRecording);
-      } else {
-        setIsRecording(false);
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
-        setAudioUri(uri);
-        setRecording(null);
-      }
-    } catch (error) {
-      console.log('Recording error:', error);
-    }
-  };
+  //       const newRecording = new Audio.Recording();
+  //       await newRecording.prepareToRecordAsync(Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY);
+  //       await newRecording.startAsync();
+  //       setRecording(newRecording);
+  //     } else {
+  //       setIsRecording(false);
+  //       await recording.stopAndUnloadAsync();
+  //       const uri = recording.getURI();
+  //       setAudioUri(uri);
+  //       setRecording(null);
+  //     }
+  //   } catch (error) {
+  //     console.log('Recording error:', error);
+  //   }
+  // };
 
   // ---- 🔊 Playback ----
-  const handlePlayback = async () => {
-    try {
-      if (audioUri) {
-        const sound = new Audio.Sound();
-        await sound.loadAsync({ uri: audioUri });
-        await sound.playAsync();
-      }
-    } catch (error) {
-      console.log('Playback error:', error);
-    }
-  };
+  // const handlePlayback = async () => {
+  //   try {
+  //     if (audioUri) {
+  //       const sound = new Audio.Sound();
+  //       await sound.loadAsync({ uri: audioUri });
+  //       await sound.playAsync();
+  //     }
+  //   } catch (error) {
+  //     console.log('Playback error:', error);
+  //   }
+  // };
 
   // ---- 💬 Send Comment ----
   const handleSendComment = () => {
@@ -84,35 +84,39 @@ export default function ReelChatCommment({ reelId, comments }) {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <Text style={styles.headerText}>Comments</Text>
-      </View>
+      </View> */}
 
       {/* New Comment Input */}
-      <View style={styles.inputContainer}>
+      {/* <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
           placeholder="Add a comment..."
           value={currentComment}
           onChangeText={setCurrentComment}
-        />
-        <TouchableOpacity style={styles.button} onPress={handleSendComment}>
+        /> */}
+         {/* <TouchableOpacity style={styles.button}  onPress={handleSendComment}>
+              <Ionicons style={styles.buttonText}
+              name="send" size={20} color="#333" />
+            </TouchableOpacity> */}
+        {/* <TouchableOpacity style={styles.button} onPress={handleSendComment}>
           <Text style={styles.buttonText}>Send</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={() => setShowEmojiPicker(true)}>
+        </TouchableOpacity> */}
+        {/* <TouchableOpacity style={styles.button} onPress={() => setShowEmojiPicker(true)}>
           <Text style={styles.buttonText}>😊</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={handleStartRecording}>
+        </TouchableOpacity> */}
+        {/* <TouchableOpacity style={styles.button} onPress={handleStartRecording}>
           <Text style={styles.buttonText}>
             {isRecording ? 'Stop Recording' : 'Record Audio'}
           </Text>
-        </TouchableOpacity>
-        {audioUri && (
+        </TouchableOpacity> */}
+        {/* {audioUri && (
           <TouchableOpacity style={styles.button} onPress={handlePlayback}>
             <Text style={styles.buttonText}>Play Audio</Text>
           </TouchableOpacity>
-        )}
-      </View>
+        )} */}
+      {/* </View> */}
 
       {/* Emoji Picker */}
       {showEmojiPicker && (
