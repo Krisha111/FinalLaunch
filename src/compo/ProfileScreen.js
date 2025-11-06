@@ -10,6 +10,7 @@ import {
   Platform,
   FlatList,
 } from "react-native";
+import { getSocket } from "../services/socketService.js";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
@@ -21,7 +22,7 @@ import {
   clearProfile,
 } from "../Redux/Slice/Profile/ProfileInformationSlice.js";
 
-export default function Profile() {
+export default function Profile({onNavigateToProfile}) {
   // ------------------ Hooks ------------------
   const navigation = useNavigation();
   const route = useRoute(); // ✅ ensures route is always defined
@@ -45,17 +46,13 @@ export default function Profile() {
   const UNSPLASH_URL = "https://api.unsplash.com/search/photos";
   const ACCESS_KEY = "0b_PBFtOzp79VOLz--Da8Qis4_l8mv1gtw4-Ne-W2Rs";
 
-  // ------------------ Helpers ------------------
-  // const getFullImageUrl = (uri) => {
-  //   if (!uri) return null;
-  //   if (uri.startsWith("http") || uri.startsWith("https")) return uri;
-  //   return `https://finallaunchbackend.onrender.com${uri}`;
-  // };
+ 
 const getFullImageUrl = (uri) => {
   if (!uri) return null;
   // ✅ Force HTTPS for Render
   return uri.replace(/^http:/, 'https:');
 };
+
 
   // ------------------ Effects ------------------
   // ✅ FIX 1: Clear profile and refetch whenever profileUserId changes
@@ -66,6 +63,32 @@ const getFullImageUrl = (uri) => {
       dispatch(fetchProfileById(profileUserId));
     }
   }, [profileUserId, dispatch]);
+  // ✅ Listen for bond/chosen updates
+useEffect(() => {
+  const socket = getSocket();
+  
+  const handleBondAccepted = () => {
+    console.log("🔄 Bond accepted, refreshing profile...");
+    if (profileUserId) {
+      dispatch(fetchProfileById(profileUserId));
+    }
+  };
+  
+  const handleChosenAccepted = () => {
+    console.log("🔄 Chosen accepted, refreshing profile...");
+    if (profileUserId) {
+      dispatch(fetchProfileById(profileUserId));
+    }
+  };
+  
+  socket.on('bond_accepted', handleBondAccepted);
+  socket.on('chosen_accepted', handleChosenAccepted);
+  
+  return () => {
+    socket.off('bond_accepted', handleBondAccepted);
+    socket.off('chosen_accepted', handleChosenAccepted);
+  };
+}, [profileUserId, dispatch]);
 
   // ✅ FIX 2: Also refetch when screen comes into focus (handles navigation back)
   useFocusEffect(
@@ -174,6 +197,32 @@ const getFullImageUrl = (uri) => {
                   <Text style={styles.bioText}>{profile?.bio}</Text>
                 </View>
               )}
+              {/* Chosen / Bonds section */}
+<View style={styles.statsContainer}>
+  <TouchableOpacity
+    style={styles.statItem}
+    onPress={() =>
+  navigation.navigate("ChosenList", {
+    userId: profileUserId,
+    onNavigateToProfile, // ✅ pass the function along
+  })
+}
+
+  >
+    <Text style={styles.statNumber}>{profile?.chosenCount ?? 0}</Text>
+    <Text style={styles.statLabel}>Chosen</Text>
+  </TouchableOpacity>
+
+  <View style={styles.divider} />
+
+  <TouchableOpacity
+    style={styles.statItem}
+    onPress={() => navigation.navigate("BondsList", { userId: profileUserId })}
+  >
+    <Text style={styles.statNumber}>{profile?.bondsCount ?? 0}</Text>
+    <Text style={styles.statLabel}>Bonds</Text>
+  </TouchableOpacity>
+</View>
             </>
           )}
         </View>
@@ -200,6 +249,33 @@ const getFullImageUrl = (uri) => {
 
 // ------------------ Styles ------------------
 const styles = StyleSheet.create({
+  statsContainer: {
+  flexDirection: "row",
+  justifyContent: "center",
+  alignItems: "center",
+  marginTop: 10,
+  marginBottom: 20,
+},
+statItem: {
+  alignItems: "center",
+  marginHorizontal: 20,
+},
+statNumber: {
+  fontSize: 18,
+  fontWeight: "700",
+  color: "#1a1a1a",
+},
+statLabel: {
+  fontSize: 13,
+  color: "#777",
+  marginTop: 3,
+},
+divider: {
+  width: 1,
+  height: 25,
+  backgroundColor: "#e0e0e0",
+},
+
   profileContainer: {
     flexGrow: 1,
     backgroundColor: "#f5f5f5",

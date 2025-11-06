@@ -121,7 +121,9 @@ useEffect(() => {
       content = <Sampleeee onNavigateToProfile={handleNavigateToProfile} setHideBottomNav={safeSetHideBottomNav} />;
       break;
     case "ProfileTab":
-      content = <ProfileStack initialUserId={profileUserId} />;
+      content = <ProfileStack 
+ onNavigateToProfile={handleNavigateToProfile}
+      initialUserId={profileUserId} />;
       break;
     default:
       content = <ReelStack 

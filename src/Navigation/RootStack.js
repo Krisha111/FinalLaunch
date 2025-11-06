@@ -16,6 +16,10 @@ import CookieeSession from '../compo/RulesPage/CookieeSession.js'
 import PrivacyPage from '../compo/RulesPage/PrivacyPage.js'
 import CookiesPolicyPage from "../compo/RulesPage/CookieeSession.js";
 import NotificationsScreen from "../compo/NotificationScreen.js";
+import ChosenList from "../compo/ListProfile/ChosenList.js";
+import BondsList from "../compo/ListProfile/BondsList.js";
+import SendSpecialFriendRequestScreen from "../compo/Request/SendSpecialFriendRequestScreen.js";
+import ViewRequestDetailsScreen from "../compo/Request/ViewRequestDetailsScreen.js";
 
 const Stack = createNativeStackNavigator();
 
@@ -93,6 +97,26 @@ export default function RootStack() {
   component={NotificationsScreen}
   options={{ headerShown: false }}
 />
+<Stack.Screen name="ChosenList">
+  {(props) => (
+    <ChosenList
+      {...props}
+      onNavigateToProfile={(userId) => {
+        // Navigate to MainTabs and tell it to open ProfileTab
+        props.navigation.navigate('MainTabs', {
+          screen: 'ProfileTab',
+          params: { userId },
+        });
+      }}
+    />
+  )}
+</Stack.Screen>
+
+<Stack.Screen name="BondsList" component={BondsList} />
+<Stack.Screen name="SendSpecialFriendRequest" 
+component={SendSpecialFriendRequestScreen} />
+<Stack.Screen name="ViewRequestDetails" 
+component={ViewRequestDetailsScreen} />
         </>
       ) : (
         // ✅ Unauthenticated stack

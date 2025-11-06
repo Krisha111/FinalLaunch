@@ -78,7 +78,7 @@ useEffect(() => {
 
   // Exact height for each reel item: screen minus tab bar
  
-  const ITEM_HEIGHT = height;
+  const ITEM_HEIGHT = height-  insets.bottom;
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     if (viewableItems.length > 0) {
       const newIndex = viewableItems[0].index || 0;
@@ -105,8 +105,8 @@ useEffect(() => {
           }}
         >
           <MaterialCommunityIcons
-            name="arrow-left"
-            size={28}
+            name="chevron-left"
+            size={32}
             color="white"
             style={styles.backIcon}
           />
@@ -130,8 +130,8 @@ useEffect(() => {
           }}
         >
           <MaterialCommunityIcons
-            name="arrow-left"
-            size={28}
+            name="chevron-left"
+            size={32}
             color="white"
             style={styles.backIcon}
           />
@@ -153,8 +153,8 @@ useEffect(() => {
   }}
 >
   <MaterialCommunityIcons
-    name="arrow-left"
-    size={28}
+    name="chevron-left"
+    size={32}
     color="white"
     style={styles.backIcon}
   />
@@ -213,21 +213,22 @@ const styles = StyleSheet.create({
  backButton: {
   position: "absolute",
   top: 10,
-  left: 20,
+  left: 10,
   zIndex: 10000, // ← Increased from 1000
-  backgroundColor: "rgba(0, 0, 0, 0.6)", // ← More visible
-  borderRadius: 30,
-  padding: 12, // ← Increased touch area
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.8,
-  shadowRadius: 3,
+backgroundColor: "transparent", // no dark circle
+padding: 8,
+
+  // shadowColor: "#000",
+  // shadowOffset: { width: 0, height: 2 },
+  // shadowOpacity: 0.8,
+  // shadowRadius: 3,
   elevation: 10, // ← Increased for Android
 },
 backIcon: {
-  textShadowColor: "rgba(0,0,0,0.8)",
-  textShadowOffset: { width: 1, height: 1 },
-  textShadowRadius: 3,
+ textShadowColor: "rgba(0, 0, 0, 0.9)",  // darker edge
+textShadowOffset: { width: 1, height: 2 },
+textShadowRadius: 4,                    // softer spread
+
 },
 
   centerContent: {

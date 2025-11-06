@@ -134,6 +134,8 @@ const profileInformationSlice = createSlice({
     username: "",
     reels: [],
     reelsCount: 0,
+    chosenCount: 0,  // ✅ ADD THIS
+    bondsCount: 0,   // ✅ ADD THIS
     loading: false,
     error: null,
   },
@@ -147,6 +149,8 @@ const profileInformationSlice = createSlice({
       state.username = "";
       state.reels = [];
       state.reelsCount = 0;
+            state.chosenCount = 0;  // ✅ ADD THIS
+      state.bondsCount = 0;   // ✅ ADD THIS
       state.loading = false;
       state.error = null;
       AsyncStorage.removeItem("profile");
@@ -177,6 +181,8 @@ const profileInformationSlice = createSlice({
           state.username = action.payload.username || "";
           state.reels = action.payload.reels || [];
           state.reelsCount = action.payload.reelsCount || 0;
+              state.chosenCount = action.payload.chosenCount || 0;  // ✅ ADD THIS
+          state.bondsCount = action.payload.bondsCount || 0;    // ✅ ADD THIS
         }
       })
 
@@ -194,7 +200,14 @@ const profileInformationSlice = createSlice({
         state.username = action.payload?.username || "";
         state.reels = action.payload?.reels || [];
         state.reelsCount = action.payload?.reelsCount || 0;
+            state.chosenCount = action.payload?.chosenCount || 0;  // ✅ ADD THIS
+        state.bondsCount = action.payload?.bondsCount || 0;    // ✅ ADD THIS
        console.log("Fetched profile image URLLLLLLLLl:", state.profileImage);
+  // ✅ ADD THESE CONSOLE LOGS
+  console.log("✅ Fetched profile image URL:", state.profileImage);
+  console.log("✅ Chosen Count from API:", action.payload?.chosenCount);
+  console.log("✅ Bonds Count from API:", action.payload?.bondsCount);
+  console.log("✅ Full payload:", action.payload);
       })
       .addCase(fetchProfileById.rejected, (state, action) => {
         state.loading = false;

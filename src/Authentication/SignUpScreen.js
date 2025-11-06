@@ -167,6 +167,33 @@ export default function SignUp({ setIsSignUp }) {
               </View>
 
               {/* Password */}
+             <View style={styles.passwordRow}>
+  <Icon name="lock" size={20} color="#444" style={styles.icon} />
+  <TextInput
+    style={styles.passwordInput}
+    placeholder="Password"
+    placeholderTextColor="#888"
+    secureTextEntry={!showPassword}
+    value={localPassword}
+    onChangeText={setLocalPassword}
+    autoCapitalize="none"
+    autoCorrect={false}
+    underlineColorAndroid="transparent"
+    textContentType="password"
+  />
+  <TouchableOpacity
+    onPress={() => setShowPassword(prev => !prev)}
+    style={{ padding: 5 }}
+  >
+    <MaterialIcon
+      name={showPassword ? "visibility" : "visibility-off"}
+      size={22}
+      color="#666"
+    />
+  </TouchableOpacity>
+</View>
+
+
               {/* <View style={styles.inputRow}>
                 <Icon name="lock" size={20} color="#444" style={styles.icon} />
                 <TextInput
@@ -181,7 +208,7 @@ export default function SignUp({ setIsSignUp }) {
               </View> */}
               {/* Password */}
 {/* Password */}
-<View style={styles.inputRow}>
+{/* <View style={styles.inputRow}>
   <Icon name="lock" size={20} color="#444" style={styles.icon} />
   <TextInput
     style={[styles.input, { flex: 1, paddingRight: 10 }]}
@@ -204,7 +231,7 @@ export default function SignUp({ setIsSignUp }) {
       color="#666"
     />
   </TouchableOpacity>
-</View>
+</View> */}
 
 
               {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
@@ -253,6 +280,28 @@ export default function SignUp({ setIsSignUp }) {
 }
 
 const styles = StyleSheet.create({
+  passwordRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderBottomWidth: 1,
+  borderBottomColor: "#ccc",
+  marginBottom: 20,
+  paddingHorizontal: 10,
+  borderRadius: 5,
+  backgroundColor: "#fff",
+  // ❌ IMPORTANT: No elevation, no shadow
+  elevation: 0,
+  shadowColor: "transparent",
+},
+
+passwordInput: {
+  flex: 1,
+  fontSize: 16,
+  paddingVertical: 10,
+  color: "#000",
+  fontFamily: Platform.OS === "android" ? undefined : "System",
+},
+
   background: {
     flex: 1,
   },

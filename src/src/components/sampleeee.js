@@ -14,6 +14,7 @@ import {
   FlatList,
   Modal,
 } from "react-native";
+import { useNotifications } from "../../compo/Notification/NotificationContext.js";
 import { useFocusEffect } from "@react-navigation/native";
 import { showLocalNotification } from '../../services/Notification/pushNotifications.js';
 import { io } from "socket.io-client";
@@ -59,10 +60,10 @@ export default function Sampleeee({ onNavigateToProfile, setHideBottomNav }) {
   const currentReel = useSelector(
     (state) => state.reelNewDrop?.reels?.[activeIndex]
   );
-
+const { notificationCount, updateBadge, incrementBadge } = useNotifications();
   const [roomClosedMessage, setRoomClosedMessage] = useState(null);
 // ADD THIS STATE:
-const [notificationCount, setNotificationCount] = useState(0);
+// const [notificationCount, setNotificationCount] = useState(0);
   const reels = useSelector((state) => state.reelNewDrop.mainPageReels || []);
   const [searchQuery, setSearchQuery] = useState("");
   const filteredUsers = onlineUsers.filter(
@@ -137,25 +138,20 @@ const [notificationCount, setNotificationCount] = useState(0);
   useEffect(() => {
     socket.on("active_users", (users) => setOnlineUsers(users));
 
-  //   socket.on("receive_invite", ({ from }) => {
-  //     setIncomingInviteFrom(from);
-  //     setInviteModalVisible(true);
-  //      // Show local notification
-  // showLocalNotification(
-  //   "ReelChatt Invite",
-  //   `${from} wants to watch reels with you!`
-  // );
-  //   });
-    // ✅ ADD THIS INSTEAD - Just update badge count
-  socket.on("receive_invite", ({ from }) => {
-    setNotificationCount((prev) => prev + 1);
-    showLocalNotification(
-      "ReelChatt Invite",
-      `${from} wants to watch reels with you!`
-    );
-  });
+
    socket.on("pending_invites", (invites) => {
-    setNotificationCount(invites.length);
+     updateBadge(invites.length);
+    // setNotificationCount(invites.length);
+  });
+    // ✅ ADD THIS NEW LISTENER
+  socket.on("receive_invite", (inviteData) => {
+    console.log("📨 New invite received in ReelChatt:", inviteData);
+    
+    // Only increment badge if NOT on notification screen
+    const currentRoute = navigation.getState()?.routes[navigation.getState()?.index]?.name;
+    if (currentRoute !== 'Notifications') {
+      incrementBadge();
+    }
   });
 
     socket.on(
@@ -244,15 +240,30 @@ const [notificationCount, setNotificationCount] = useState(0);
       socket.off("reel_play_state");
       socket.off("admin_left");
     };
-  }, [isAdmin, username, activeIndex, navigation]);
-// ADD THIS TO FETCH NOTIFICATION COUNT ON SCREEN FOCUS:
+  }, [isAdmin, username, activeIndex, navigation, updateBadge, incrementBadge]);
+// REPLACE your existing useFocusEffect with this:
+// ✅ CORRECT VERSION - Use updateBadge from context
 useFocusEffect(
   React.useCallback(() => {
     if (username) {
+      // Fetch pending invites to update badge
       socket.emit("get_pending_invites", { username });
     }
-  }, [username])
+    
+    // Listen for updated count
+    const handlePendingInvites = (invites) => {
+        console.log("📬 Syncing badge on ReelChatt focus:", invites.length);
+      updateBadge(invites.length); // ✅ Use context function
+    };
+    
+    socket.on("pending_invites", handlePendingInvites);
+    
+    return () => {
+      socket.off("pending_invites", handlePendingInvites);
+    };
+  }, [username, updateBadge]) // ✅ Add updateBadge to dependencies
 );
+
   // ------------------- SCROLL TO INDEX -------------------
   const scrollToIndex = (index) => {
     if (!reelsScrollRef.current || reels.length === 0) return;
@@ -293,28 +304,6 @@ useFocusEffect(
     }
   };
 
-  // ------------------- VIEWABLE ITEMS -------------------
-  // const onViewableItemsChanged = 
-  // useRef(({ viewableItems }) => {
-  //   if (!viewableItems.length) return;
-  //   const newIndex = viewableItems[0].index;
-  //   setActiveIndex(newIndex);
-  //   setIsPlaying(true);
-  //   if (isAdmin && room) {
-  //     socket.emit("sync_reel_index", { room, index: newIndex });
-  //     socket.emit("reel_play", { room, index: newIndex, isPlaying: true });
-  //   }
-  // }).current;
-
-  // const viewabilityConfig = useRef({
-  //   itemVisiblePercentThreshold: 50,
-  //   minimumViewTime: 50,
-  // }).current;
-
-  // ------------------- VIEWABLE ITEMS -------------------
-  // ------------------- VIEWABLE ITEMS -------------------
-  // ------------------- VIEWABLE ITEMS -------------------
-  // ------------------- VIEWABLE ITEMS -------------------
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     if (!viewableItems.length) return;
     const newIndex = viewableItems[0].index;
@@ -453,22 +442,10 @@ useFocusEffect(
             <>
               <View style={styles.headerContainer}>
                 <Text style={styles.headerTitle}>ReelChatt</Text>
-               {/* <View style={styles.notificationBadgeContainer}>
+               <View style={styles.notificationBadgeContainer}>
     <NotificationBadge />
-  </View>*/}
-  <TouchableOpacity
-    style={styles.notificationButton}
-    onPress={() => navigation.navigate("Notifications")}
-  >
-    <Icon name="notifications" size={28} color="#000" />
-    {notificationCount > 0 && (
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>
-          {notificationCount > 9 ? "9+" : notificationCount}
-        </Text>
-      </View>
-    )}
-  </TouchableOpacity>
+  </View>
+ 
               </View>
               <View style={styles.bodyContainer}>
                 {/* <Text style={styles.subtitle}>Online Users...</Text> */}
@@ -517,43 +494,7 @@ useFocusEffect(
                 </View>
 
 
-                {/* --------------------------------------------------------------------- */}
-                {/* {onlineUsers
-                  .filter((u) => u.username !== username)
-                  .map((u) => (
-                    <View key={u.username} style={styles.userRow}>
-                      {u.profileImage ? (
-                        <Image
-                          source={{ uri: u.profileImage }}
-                          style={styles.avatar}
-                        />
-                      ) : (
-                        <Icon
-                          style={styles.avatar}
-                          name="person-circle"
-                          size={80}
-                        />
-                      )}
-                      <View style={styles.userTextContainer}>
-                        <Text
-                          style={styles.username}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {u.username}
-                        </Text>
-                        <Text style={styles.bio}>{u.bio || "Bio"}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.inviteButton}
-                        onPress={() => sendInvite(u.username)}
-                      >
-                        <Text style={{ color: "white" }}>Invite</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                <Text style={styles.subtitle}>Suggestions...</Text>
-                <OnlineUsersSuggestions goToProfile={goToProfile} /> */}
+       
               </View>
             </>
           }
@@ -561,29 +502,7 @@ useFocusEffect(
           showsVerticalScrollIndicator={false}
         />
 
-      {/*  <Modal transparent visible={inviteModalVisible} animationType="fade">
-          <View style={styles.modalBackground}>
-            <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>
-                {incomingInviteFrom} invited you to join a reel chat!
-              </Text>
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.acceptButton}
-                  onPress={acceptInvite}
-                >
-                  <Text style={styles.modalButtonText}>Accept</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.declineButton}
-                  onPress={declineInvite}
-                >
-                  <Text style={styles.modalButtonText}>Decline</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>*/}
+      
       </>
     );
   }
@@ -659,14 +578,6 @@ useFocusEffect(
 
       {!isAdmin && <View style={styles.touchBlocker} />}
 
-      {/* <TouchableOpacity
-        // style={[styles.chatButton, 
-        //   { zIndex: 30, elevation: 30 }]}
-        style={[styles.chatButton]}
-        onPress={openChat}
-      >
-        <Text style={styles.chatButtonText}>💬</Text>
-      </TouchableOpacity> */}
      {!chatVisible && (
   <TouchableOpacity
     style={[styles.chatButton, styles.chatButtonAbove]}

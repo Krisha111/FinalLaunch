@@ -10,16 +10,36 @@ import ImagePopUp from "../compo/Explore/PopUp/ImagePopUp.js";
 const Stack = createNativeStackNavigator();
 
 // ✅ UPDATED: Receives initialUserId prop from MainTabs
-export default function ProfileStack({ initialUserId }) {
+export default function ProfileStack({ onNavigateToProfile,initialUserId }) {
   return (
     <Stack.Navigator>
-      <Stack.Screen
+      {/* <Stack.Screen
         name="ProfileScreen"
         component={ProfileScreen}
         // ✅ NEW: Pass userId as initialParams to ProfileScreen
         initialParams={{ userId: initialUserId }}
         options={{ headerShown: false }}
-      />
+      >
+       {(props) => (
+    <ProfileScreen
+      {...props}
+      onNavigateToProfile={onNavigateToProfile}
+      userId={props.route.params?.userId || initialUserId}
+    />
+  )}</Stack.Screen> */}
+   <Stack.Screen
+        name="ProfileScreen"
+        options={{ headerShown: false }}
+        initialParams={{ userId: initialUserId }}
+      >
+        {(props) => (
+          <ProfileScreen
+            {...props}
+            onNavigateToProfile={onNavigateToProfile}
+            userId={props.route.params?.userId || initialUserId}
+          />
+        )}
+      </Stack.Screen>
       <Stack.Screen
         name="EditProfile"
         component={EditProfile}

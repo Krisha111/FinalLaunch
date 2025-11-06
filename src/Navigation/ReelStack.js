@@ -37,7 +37,8 @@ export default function ReelStack({ onNavigateToProfile, onBackPress, setHideBot
       
       {/* ✅ ReelTalk screen - only used if navigated directly (unlikely) */}
       <Stack.Screen name="ReelTalk">
-        {(props) => <ReelTalk {...props} onNavigateToProfile={onNavigateToProfile} />}
+        {(props) => <ReelTalk {...props}
+         onNavigateToProfile={onNavigateToProfile} />}
       </Stack.Screen>
       
       <Stack.Screen name="ChatScreen" component={ChatScreen} />

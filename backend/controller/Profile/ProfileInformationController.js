@@ -39,6 +39,36 @@ const storage = multer.diskStorage({
 });
 export const upload = multer({ storage });
 
+
+// ✅ Return list of "chosen" users
+export const getChosenList = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId).populate("chosen", "name username profileImage");
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.status(200).json(user.chosen || []);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ✅ Return list of "bonds" users
+export const getBondsList = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId).populate("bonds", "name username profileImage");
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.status(200).json(user.bonds || []);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
 // -------------------- Remove Background --------------------
 export const removeBackground = async (req, res) => {
   try {
@@ -149,12 +179,17 @@ export const getProfileById = async (req, res) => {
 
     const userObject = user.toObject();
     userObject.reelsCount = user.reels ? user.reels.length : 0;
-
+    // ✅ ADD THESE COUNTS
+    userObject.chosenCount = user.chosen ? user.chosen.length : 0;
+    userObject.bondsCount = user.bonds ? user.bonds.length : 0;
     // ✅ Force HTTPS on output
     if (userObject.profileImage) {
       userObject.profileImage = getSecureUrl(userObject.profileImage);
     }
-
+// In getProfileById function, before res.json(userObject):
+console.log("👥 Chosen Count:", userObject.chosenCount);
+console.log("🤝 Bonds Count:", userObject.bondsCount);
+console.log("📤 Sending to frontend:", JSON.stringify(userObject, null, 2));
     console.log("🔍 Fetched profile:", userObject.username);
     console.log("🖼️ Profile Image URL:", userObject.profileImage);
 console.log("🖼️ Profile Image URL being sent to frontenddddddd:", userObject.profileImage);
